@@ -17,9 +17,9 @@
   position: relative;
 }
 
-/* Nuansa halus oranye hangat pada sidebar saat mode General aktif */
+/* Nuansa oranye gelap hangat pada sidebar saat mode General aktif */
 .sidebar.sidebar-general {
-  background: linear-gradient(180deg, #2d2522 0%, #262124 100%);
+  background: linear-gradient(180deg, #2d221d 0%, #241b18 100%);
   border-right-color: rgba(249, 115, 22, 0.22);
 }
 
@@ -103,7 +103,6 @@
   line-height: 1.15;
 }
 
-/* Masking container tepat di bawah StudyMate AI agar teks General muncul dari belakangnya */
 .logo-general-mask {
   position: relative;
   z-index: 1;
@@ -226,6 +225,12 @@
   white-space: nowrap;
 }
 
+.sidebar.sidebar-general .history-title,
+.sidebar.sidebar-general .search-input::placeholder,
+.sidebar.sidebar-general .search-icon {
+  color: #c2b2aa;
+}
+
 .history-list-animated {
   width: 100%;
 }
@@ -333,6 +338,10 @@
   font-size: 14px;
 }
 
+.sidebar.sidebar-general .no-result {
+  color: #c2b2aa;
+}
+
 .history::-webkit-scrollbar {
   width: 6px;
 }
@@ -340,6 +349,10 @@
 .history::-webkit-scrollbar-thumb {
   background: #5c6288;
   border-radius: 999px;
+}
+
+.sidebar.sidebar-general .history::-webkit-scrollbar-thumb {
+  background: #6b5349;
 }
 
 .history::-webkit-scrollbar-track {
@@ -418,7 +431,7 @@
   box-shadow: 0 0 8px rgba(249, 115, 22, 0.85);
 }
 
-/* Popover Menu Pengaturan Mode */
+/* Popover Menu Pengaturan Mode (Basis Data: Navy-Ungu | General: Oranye Gelap) */
 .settings-popover {
   position: absolute;
   bottom: calc(100% + 10px);
@@ -434,6 +447,12 @@
   flex-direction: column;
   gap: 8px;
   animation: popoverPopUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+.sidebar.sidebar-general .settings-popover {
+  background: #251c18;
+  border-color: rgba(249, 115, 22, 0.28);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.62);
 }
 
 @keyframes popoverPopUp {
@@ -471,6 +490,10 @@
 .settings-popover-sub {
   font-size: 11.5px;
   color: #9ca1ba;
+}
+
+.sidebar.sidebar-general .settings-popover-sub {
+  color: #c2b2aa;
 }
 
 /* Toggle Switch Pill Ungu <-> Oranye */
@@ -512,7 +535,7 @@
   transform: translateX(20px);
 }
 
-/* Kartu Pilihan Mode Vertikal (Atas: Basis Data | Bawah: General) */
+/* Kartu Pilihan Mode Vertikal */
 .mode-option-card {
   display: flex;
   align-items: center;
@@ -538,7 +561,7 @@
 }
 
 .mode-option-card.selected-general {
-  background: rgba(249, 115, 22, 0.18);
+  background: rgba(249, 115, 22, 0.2);
   border-color: #fb923c;
 }
 
@@ -574,6 +597,10 @@
 .mode-option-desc {
   font-size: 11.5px;
   color: #a6abc4;
+}
+
+.sidebar.sidebar-general .mode-option-desc {
+  color: #c2b2aa;
 }
 
 .db-check {

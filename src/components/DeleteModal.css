@@ -27,6 +27,11 @@
   animation: popIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.app.mode-general .delete-modal {
+  background: #261e1b;
+  border-color: rgba(249, 115, 22, 0.24);
+}
+
 .modal-header {
   display: flex;
   align-items: center;
@@ -63,14 +68,14 @@
   word-break: break-word;
 }
 
+.app.mode-general .modal-desc {
+  color: #c2b2aa;
+}
+
 .modal-desc strong {
   color: #ffffff;
   font-weight: 600;
 }
-
-/* =========================
-   Buttons (Rata kanan ala dialog modern)
-========================= */
 
 .modal-actions {
   display: flex;
