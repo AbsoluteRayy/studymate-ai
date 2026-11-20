@@ -1,0 +1,117 @@
+/* =========================
+   Global Typography, CSS Variables & Reset
+========================= */
+:root {
+  --font-gemini-text: "Product Sans", "Google Sans", "DM Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-gemini-display: "Product Sans", "Google Sans", "DM Sans", sans-serif;
+  --font-gemini-mono: "JetBrains Mono", Consolas, monospace;
+
+  /* Palet Default: StudyMate Basis Data (Ungu) */
+  --accent-primary: #6f45ff;
+  --accent-secondary: #8b6cff;
+  --accent-hover-light: #f5f2ff;
+  --accent-soft-bg: rgba(111, 69, 255, 0.1);
+  --accent-soft-bg-dark: rgba(139, 108, 255, 0.16);
+  --accent-soft-border: rgba(111, 69, 255, 0.25);
+  --accent-soft-border-dark: rgba(139, 108, 255, 0.35);
+  --accent-badge-text-dark: #b49eff;
+  --accent-glow: rgba(111, 69, 255, 0.32);
+  --accent-ring: rgba(111, 69, 255, 0.24);
+  --accent-gradient: linear-gradient(135deg, #6f45ff, #8b6cff);
+  --accent-gradient-hover: linear-gradient(135deg, #7b53ff, #997dff);
+}
+
+/* Palet Mode General: Oranye Kontras (Tema Terang & Gelap) */
+.app.mode-general {
+  --accent-primary: #ea580c;
+  --accent-secondary: #f97316;
+  --accent-hover-light: #fff4ed;
+  --accent-soft-bg: rgba(234, 88, 12, 0.11);
+  --accent-soft-bg-dark: rgba(249, 115, 22, 0.18);
+  --accent-soft-border: rgba(234, 88, 12, 0.28);
+  --accent-soft-border-dark: rgba(249, 115, 22, 0.38);
+  --accent-badge-text-dark: #fdba74;
+  --accent-glow: rgba(234, 88, 12, 0.34);
+  --accent-ring: rgba(249, 115, 22, 0.25);
+  --accent-gradient: linear-gradient(135deg, #ea580c, #f97316);
+  --accent-gradient-hover: linear-gradient(135deg, #f97316, #fb923c);
+}
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: var(--font-gemini-text) !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Matikan transisi hanya pada layout agar buka-tutup sidebar instan, kecuali elemen .anim-allow */
+*:not(.anim-allow):not(.anim-allow *) {
+  transition: none !important;
+  animation: none !important;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Heading, Logo & Judul Header */
+h1,
+h2,
+h3,
+.logo h2,
+.welcome h1,
+.chat-header-title,
+.ai-message h1,
+.ai-message h2,
+.ai-message h3,
+.delete-modal h2 {
+  font-family: var(--font-gemini-display) !important;
+  letter-spacing: -0.015em;
+}
+
+.ai-message {
+  font-size: 17px !important;
+  line-height: 1.7 !important;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+}
+
+.ai-message strong {
+  font-weight: 600 !important;
+}
+
+.ai-message p,
+.ai-message li {
+  line-height: 1.7 !important;
+}
+
+/* Kode SQL & Pemrograman */
+code,
+pre,
+pre code,
+.ai-message code,
+.ai-message pre {
+  font-family: var(--font-gemini-mono) !important;
+  font-size: 14.5px !important;
+}

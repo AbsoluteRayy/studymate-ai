@@ -1,0 +1,202 @@
+import "./Sidebar.css";
+import { useEffect, useRef, useState } from "react";
+import SettingsMenu from "./SettingsMenu";
+
+function Sidebar({
+  isOpen,
+  isMobile,
+  onToggle,
+  chats,
+  currentChatId,
+  setCurrentChatId,
+  onNewChat,
+  onDeleteChat,
+  aiMode,
+  onSwitchMode,
+}) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [displayedChats, setDisplayedChats] = useState(chats);
+  const [slidePhase, setSlidePhase] = useState("idle"); // "idle" | "slide-out" | "slide-in"
+  const prevModeRef = useRef(aiMode);
+
+  // Animasi slide-out ke kiri lalu slide-in dari kiri ke kanan saat mode AI berganti
+  useEffect(() => {
+    if (prevModeRef.current !== aiMode) {
+      prevModeRef.current = aiMode;
+      setSearchTerm("");
+      setSlidePhase("slide-out");
+
+      const timerOut = setTimeout(() => {
+        setDisplayedChats(chats);
+        setSlidePhase("slide-in");
+
+        const timerIn = setTimeout(() => {
+          setSlidePhase("idle");
+        }, 320);
+
+        return () => clearTimeout(timerIn);
+      }, 210);
+
+      return () => clearTimeout(timerOut);
+    } else {
+      setDisplayedChats(chats);
+    }
+  }, [aiMode, chats]);
+
+  const filteredChats = displayedChats.filter((chat) =>
+    chat.title.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const isGeneral = aiMode === "general";
+
+  return (
+    <aside
+      className={`sidebar ${isOpen ? "open" : "closed"} ${
+        isMobile ? "mobile-drawer" : ""
+      } ${isGeneral ? "sidebar-general" : "sidebar-database"}`}
+    >
+      {/* Header Sidebar: Tombol Toggle + Logo StudyMate AI & Animasi Teks General */}
+      <div className="logo">
+        <button
+          className="sidebar-toggle-btn"
+          onClick={onToggle}
+          title="Sembunyikan Sidebar"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <line x1="9" y1="3" x2="9" y2="21" />
+          </svg>
+        </button>
+
+        <div className="logo-brand-stack">
+          <h2 className="logo-main-text">StudyMate AI</h2>
+          <div className="logo-general-mask">
+            <span
+              className={`logo-general-subtext anim-allow ${
+                isGeneral ? "visible" : "hidden"
+              }`}
+            >
+              General
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Tombol New Chat (Otomatis Ungu / Oranye via CSS Variable) */}
+      <button className="new-chat" onClick={onNewChat}>
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+        <span>New Chat</span>
+      </button>
+
+      {/* Search dengan ikon kaca pembesar outline */}
+      <div className="search-container">
+        <svg
+          className="search-icon"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+        <input
+          type="text"
+          className="search-input"
+          placeholder={
+            isGeneral ? "Search general chats..." : "Search database chats..."
+          }
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
+
+      {/* Daftar Riwayat Chat dengan Animasi Slide Kiri */}
+      <div className="history">
+        <div className="history-title">
+          {isGeneral ? "General Chats" : "Today's Chat"}
+        </div>
+
+        <div className={`history-list-animated anim-allow ${slidePhase}`}>
+          {filteredChats.length === 0 ? (
+            <div className="no-result">
+              {searchTerm
+                ? "Chat tidak ditemukan"
+                : isGeneral
+                ? "Belum ada obrolan General"
+                : "Belum ada obrolan Basis Data"}
+            </div>
+          ) : (
+            filteredChats.map((chat) => (
+              <div
+                key={chat.id}
+                className={`history-item ${
+                  chat.id === currentChatId ? "active" : ""
+                }`}
+                onClick={() => setCurrentChatId(chat.id)}
+                title={chat.title}
+              >
+                <span className="chat-title">{chat.title}</span>
+
+                <button
+                  className="delete-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteChat(chat.id);
+                  }}
+                  title="Hapus chat"
+                >
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    <line x1="10" y1="11" x2="10" y2="17" />
+                    <line x1="14" y1="11" x2="14" y2="17" />
+                  </svg>
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Tombol Pengaturan (Roda Gigi) di Pojok Kiri Bawah */}
+      <SettingsMenu aiMode={aiMode} onSwitchMode={onSwitchMode} />
+    </aside>
+  );
+}
+
+export default Sidebar;
