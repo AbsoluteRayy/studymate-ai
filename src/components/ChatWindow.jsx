@@ -194,6 +194,29 @@ function ChatWindow({
     }
   }, [currentTitle, isGeneral]);
 
+  // Sinkronkan warna background html/body & meta theme-color agar full edge-to-edge sampai bar gestur bawah HP
+  useEffect(() => {
+    let bgColor = "#1c1d2b"; // Basis Data Dark
+    if (darkMode && isGeneral) {
+      bgColor = "#1a1614"; // General Dark
+    } else if (!darkMode && isGeneral) {
+      bgColor = "#f7f4f1"; // General Light
+    } else if (!darkMode && !isGeneral) {
+      bgColor = "#f4f4f7"; // Basis Data Light
+    }
+
+    document.documentElement.style.backgroundColor = bgColor;
+    document.body.style.backgroundColor = bgColor;
+
+    let metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (!metaTheme) {
+      metaTheme = document.createElement("meta");
+      metaTheme.name = "theme-color";
+      document.head.appendChild(metaTheme);
+    }
+    metaTheme.setAttribute("content", bgColor);
+  }, [darkMode, isGeneral]);
+
   useEffect(() => {
     function handleEscLightbox(e) {
       if (e.key === "Escape" && lightboxImage) {
@@ -1163,7 +1186,6 @@ Buatkan:
         onStop={handleStopGenerating}
         isGenerating={isBusy}
         onPreviewImage={(imgUrl) => setLightboxImage(imgUrl)}
-        aiMode={aiMode}
       />
     </div>
   );
