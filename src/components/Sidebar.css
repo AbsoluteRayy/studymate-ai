@@ -35,6 +35,7 @@
   width: 280px;
   min-width: 280px;
   max-width: 82vw;
+  padding: 10px 14px 14px;
   z-index: 100;
 }
 
@@ -55,16 +56,17 @@
 }
 
 /* =========================
-   Logo + Animasi Label "General"
+   Logo + Tombol Sidebar Pojok Kiri Presisi
+   Desktop: top 14px, left 16px | Mobile: top 10px, left 14px
 ========================= */
 
 .logo {
   margin-bottom: 14px;
-  padding-left: 12px;
+  padding-left: 0;
   min-height: 38px;
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 10px;
 }
 
 .sidebar-toggle-btn {
@@ -170,7 +172,7 @@
 }
 
 /* =========================
-   Search (Lebih Terang & Jelas)
+   Search
 ========================= */
 
 .search-container {
@@ -372,7 +374,7 @@
 }
 
 /* =========================
-   Footer Settings Gear (Lebih Terang & Jelas)
+   Footer Settings Gear
 ========================= */
 
 .sidebar-footer-settings {
