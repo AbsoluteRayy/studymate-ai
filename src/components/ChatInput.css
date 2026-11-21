@@ -20,12 +20,12 @@
 }
 
 .chat-window.dark .chat-input-box {
-  background: #2b2d42;
+  background: #333650;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.36);
 }
 
 .app.mode-general .chat-window.dark .chat-input-box {
-  background: #2b211d;
+  background: #362924;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.42);
 }
 
@@ -34,7 +34,12 @@
 }
 
 .chat-window.dark .chat-input-box:focus-within {
+  background: #383c58;
   box-shadow: 0 10px 34px rgba(0, 0, 0, 0.48);
+}
+
+.app.mode-general .chat-window.dark .chat-input-box:focus-within {
+  background: #3c2e28;
 }
 
 /* =========================
@@ -118,7 +123,7 @@
   width: 38px;
   height: 38px;
   border-radius: 9999px;
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(0, 0, 0, 0.06);
   border: none;
   outline: none;
   color: #333;
@@ -136,8 +141,8 @@
 }
 
 .chat-window.dark .attach-plus-btn {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ececf1;
+  background: rgba(255, 255, 255, 0.12);
+  color: #f3f4fb;
 }
 
 .chat-window.dark .attach-plus-btn:hover:not(:disabled) {
@@ -164,12 +169,12 @@
 }
 
 .chat-window.dark .attach-dropdown-menu {
-  background: #25273a;
+  background: #333650;
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.52);
 }
 
 .app.mode-general .chat-window.dark .attach-dropdown-menu {
-  background: #291f1b;
+  background: #362924;
 }
 
 .attach-dropdown-item {
@@ -198,7 +203,7 @@
 }
 
 .chat-window.dark .attach-dropdown-item:hover {
-  background: rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.11);
   color: #ffffff;
 }
 
@@ -219,11 +224,11 @@
 }
 
 .chat-window.dark .attach-item-sub {
-  color: #9ca1ba;
+  color: #b4b9d1;
 }
 
 .app.mode-general .chat-window.dark .attach-item-sub {
-  color: #c2b2aa;
+  color: #cbbab2;
 }
 
 .hidden-file-input {
@@ -247,19 +252,23 @@
 }
 
 .chat-window.dark .chat-textarea {
-  color: #f3f4f8;
+  color: #ffffff;
 }
 
 .chat-textarea::placeholder {
   color: #8e8ea0;
 }
 
+.chat-window.dark .chat-textarea::placeholder {
+  color: #b4b9d1;
+}
+
 .app.mode-general .chat-window.dark .chat-textarea::placeholder {
-  color: #b5a39b;
+  color: #c9b7ae;
 }
 
 /* =========================
-   Tombol Kirim & Tombol Stop (Bulat Penuh Tanpa Outline)
+   Tombol Kirim & Tombol Stop
 ========================= */
 .send-btn {
   width: 38px;
@@ -271,8 +280,8 @@
   outline: none !important;
   appearance: none;
   -webkit-appearance: none;
-  background-color: #e6e6eb;
-  color: #6b6b76;
+  background-color: #e2e2ea;
+  color: #5b5b66;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -290,14 +299,14 @@
 }
 
 .chat-window.dark .send-btn {
-  background-color: #3a3d56;
-  color: #8f94b0;
+  background-color: #464a6b;
+  color: #cfd3eb;
   box-shadow: none;
 }
 
 .app.mode-general .chat-window.dark .send-btn {
-  background-color: #3d2e28;
-  color: #c4afa5;
+  background-color: #4a3932;
+  color: #dfd0c8;
   box-shadow: none;
 }
 

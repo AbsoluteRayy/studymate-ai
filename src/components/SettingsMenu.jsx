@@ -29,7 +29,6 @@ function SettingsMenu({ aiMode, onSwitchMode }) {
     <div className="sidebar-footer-settings" ref={menuRef}>
       {isOpen && (
         <div className="settings-popover anim-allow">
-          {/* Header Popover + Sakelar Switch */}
           <div className="settings-popover-header">
             <div className="settings-header-text">
               <span className="settings-popover-title">Switch Mode AI</span>
@@ -52,7 +51,6 @@ function SettingsMenu({ aiMode, onSwitchMode }) {
             </button>
           </div>
 
-          {/* Pilihan Atas: StudyMate Basis Data (Ungu) */}
           <button
             type="button"
             className={`mode-option-card anim-allow ${
@@ -70,12 +68,12 @@ function SettingsMenu({ aiMode, onSwitchMode }) {
             {!isGeneral && (
               <svg
                 className="mode-check-icon db-check"
-                width="16"
-                height="16"
+                width="17"
+                height="17"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="2.5"
+                strokeWidth="2.6"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
@@ -84,7 +82,6 @@ function SettingsMenu({ aiMode, onSwitchMode }) {
             )}
           </button>
 
-          {/* Pilihan Bawah: StudyMate General (Oranye) */}
           <button
             type="button"
             className={`mode-option-card anim-allow ${
@@ -102,12 +99,12 @@ function SettingsMenu({ aiMode, onSwitchMode }) {
             {isGeneral && (
               <svg
                 className="mode-check-icon general-check"
-                width="16"
-                height="16"
+                width="17"
+                height="17"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="2.5"
+                strokeWidth="2.6"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
@@ -118,7 +115,6 @@ function SettingsMenu({ aiMode, onSwitchMode }) {
         </div>
       )}
 
-      {/* Tombol Roda Gigi (Settings) di Pojok Kiri Bawah */}
       <button
         type="button"
         className={`sidebar-settings-btn anim-allow ${isOpen ? "active" : ""}`}
@@ -133,7 +129,7 @@ function SettingsMenu({ aiMode, onSwitchMode }) {
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
-          strokeWidth="2"
+          strokeWidth="2.4"
           strokeLinecap="round"
           strokeLinejoin="round"
         >

@@ -16,10 +16,9 @@ function Sidebar({
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [displayedChats, setDisplayedChats] = useState(chats);
-  const [slidePhase, setSlidePhase] = useState("idle"); // "idle" | "slide-out" | "slide-in"
+  const [slidePhase, setSlidePhase] = useState("idle");
   const prevModeRef = useRef(aiMode);
 
-  // Animasi slide-out ke kiri lalu slide-in dari kiri ke kanan saat mode AI berganti
   useEffect(() => {
     if (prevModeRef.current !== aiMode) {
       prevModeRef.current = aiMode;
@@ -55,7 +54,7 @@ function Sidebar({
         isMobile ? "mobile-drawer" : ""
       } ${isGeneral ? "sidebar-general" : "sidebar-database"}`}
     >
-      {/* Header Sidebar: Tombol Toggle + Logo StudyMate AI & Animasi Teks General */}
+      {/* Header Sidebar: Tombol Toggle + Logo StudyMate AI */}
       <div className="logo">
         <button
           className="sidebar-toggle-btn"
@@ -68,11 +67,11 @@ function Sidebar({
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            strokeWidth="2"
+            strokeWidth="2.4"
             strokeLinecap="round"
             strokeLinejoin="round"
           >
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <rect x="3" y="3" width="18" height="18" rx="3" />
             <line x1="9" y1="3" x2="9" y2="21" />
           </svg>
         </button>
@@ -91,15 +90,15 @@ function Sidebar({
         </div>
       </div>
 
-      {/* Tombol New Chat (Otomatis Ungu / Oranye via CSS Variable) */}
+      {/* Tombol New Chat */}
       <button className="new-chat" onClick={onNewChat}>
         <svg
-          width="18"
-          height="18"
+          width="19"
+          height="19"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
-          strokeWidth="2.2"
+          strokeWidth="2.5"
           strokeLinecap="round"
           strokeLinejoin="round"
         >
@@ -109,21 +108,21 @@ function Sidebar({
         <span>New Chat</span>
       </button>
 
-      {/* Search dengan ikon kaca pembesar outline */}
+      {/* Search */}
       <div className="search-container">
         <svg
           className="search-icon"
-          width="16"
-          height="16"
+          width="17"
+          height="17"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
-          strokeWidth="2"
+          strokeWidth="2.4"
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <circle cx="11" cy="11" r="8" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          <circle cx="11" cy="11" r="7.5" />
+          <line x1="20.5" y1="20.5" x2="16.5" y2="16.5" />
         </svg>
         <input
           type="text"
@@ -136,7 +135,7 @@ function Sidebar({
         />
       </div>
 
-      {/* Daftar Riwayat Chat dengan Animasi Slide Kiri */}
+      {/* Daftar Riwayat Chat */}
       <div className="history">
         <div className="history-title">
           {isGeneral ? "General Chats" : "Today's Chat"}
@@ -172,12 +171,12 @@ function Sidebar({
                   title="Hapus chat"
                 >
                   <svg
-                    width="15"
-                    height="15"
+                    width="16"
+                    height="16"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="2"
+                    strokeWidth="2.4"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   >
