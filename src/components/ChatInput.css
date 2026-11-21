@@ -12,32 +12,29 @@
   flex-direction: column;
   gap: 10px;
   background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 26px;
+  border: none;
+  border-radius: 28px;
   padding: 10px 12px;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.09);
   position: relative;
 }
 
 .chat-window.dark .chat-input-box {
   background: #2b2d42;
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.36);
 }
 
-/* Oranye gelap hangat untuk kotak input saat Mode General aktif */
 .app.mode-general .chat-window.dark .chat-input-box {
   background: #2b211d;
-  border-color: rgba(249, 115, 22, 0.24);
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.42);
 }
 
 .chat-input-box:focus-within {
-  border-color: var(--accent-primary);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.14);
 }
 
 .chat-window.dark .chat-input-box:focus-within {
-  border-color: var(--accent-secondary);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.48);
 }
 
 /* =========================
@@ -54,23 +51,16 @@
   position: relative;
   width: 76px;
   height: 76px;
-  border-radius: 14px;
+  border-radius: 18px;
   overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.15);
+  border: none;
   background: #14151f;
   flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 .app.mode-general .input-image-thumb-wrapper {
   background: #1f1815;
-}
-
-.chat-window.dark .input-image-thumb-wrapper {
-  border-color: rgba(255, 255, 255, 0.18);
-}
-
-.input-image-thumb-wrapper:hover {
-  border-color: var(--accent-secondary);
 }
 
 .input-image-thumb {
@@ -94,18 +84,19 @@
   border-radius: 9999px;
   background: rgba(20, 21, 31, 0.85);
   color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  border: none;
+  outline: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   padding: 0;
   z-index: 2;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
 .input-image-remove-btn:hover {
   background: #e53935;
-  border-color: #e53935;
 }
 
 /* =========================
@@ -128,7 +119,8 @@
   height: 38px;
   border-radius: 9999px;
   background: rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: none;
+  outline: none;
   color: #333;
   display: inline-flex;
   align-items: center;
@@ -141,19 +133,16 @@
 .attach-plus-btn:hover:not(:disabled) {
   background: var(--accent-soft-bg);
   color: var(--accent-primary);
-  border-color: var(--accent-soft-border);
 }
 
 .chat-window.dark .attach-plus-btn {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
   color: #ececf1;
 }
 
 .chat-window.dark .attach-plus-btn:hover:not(:disabled) {
   background: var(--accent-soft-bg-dark);
   color: #ffffff;
-  border-color: var(--accent-secondary);
 }
 
 .attach-plus-btn:disabled {
@@ -167,22 +156,20 @@
   left: 0;
   min-width: 260px;
   background: #ffffff;
-  border: 1px solid #e2e2e5;
-  border-radius: 14px;
+  border: none;
+  border-radius: 20px;
   padding: 6px;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
   z-index: 50;
 }
 
 .chat-window.dark .attach-dropdown-menu {
   background: #25273a;
-  border-color: rgba(255, 255, 255, 0.14);
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.48);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.52);
 }
 
 .app.mode-general .chat-window.dark .attach-dropdown-menu {
   background: #291f1b;
-  border-color: rgba(249, 115, 22, 0.25);
 }
 
 .attach-dropdown-item {
@@ -190,10 +177,11 @@
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 10px 14px;
   background: transparent;
   border: none;
-  border-radius: 10px;
+  outline: none;
+  border-radius: 14px;
   color: #202123;
   font-family: inherit;
   text-align: left;
@@ -210,7 +198,7 @@
 }
 
 .chat-window.dark .attach-dropdown-item:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.09);
   color: #ffffff;
 }
 
@@ -271,7 +259,7 @@
 }
 
 /* =========================
-   Tombol Kirim & Tombol Stop (Ungu / Oranye via CSS Variable)
+   Tombol Kirim & Tombol Stop (Bulat Penuh Tanpa Outline)
 ========================= */
 .send-btn {
   width: 38px;
@@ -284,7 +272,6 @@
   appearance: none;
   -webkit-appearance: none;
   background-color: #e6e6eb;
-  background-clip: padding-box;
   color: #6b6b76;
   display: inline-flex;
   align-items: center;
@@ -293,7 +280,7 @@
   flex-shrink: 0;
   padding: 0;
   overflow: hidden;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  box-shadow: none;
 }
 
 .send-btn:focus,
@@ -305,14 +292,13 @@
 .chat-window.dark .send-btn {
   background-color: #3a3d56;
   color: #8f94b0;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  box-shadow: none;
 }
 
-/* Lingkaran tombol kirim saat kosong di Mode General: cokelat-oranye gelap */
 .app.mode-general .chat-window.dark .send-btn {
   background-color: #3d2e28;
   color: #c4afa5;
-  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.22);
+  box-shadow: none;
 }
 
 .send-btn:not(.active):not(.stopping) svg path {
@@ -328,7 +314,7 @@
 
 .send-btn.active:hover {
   background: var(--accent-gradient-hover) !important;
-  box-shadow: 0 4px 16px var(--accent-glow);
+  box-shadow: 0 6px 18px var(--accent-glow);
 }
 
 .send-btn.stopping {
@@ -340,7 +326,7 @@
 
 .send-btn.stopping:hover {
   background: #e53935 !important;
-  box-shadow: 0 4px 14px rgba(229, 57, 53, 0.45);
+  box-shadow: 0 6px 18px rgba(229, 57, 53, 0.45);
 }
 
 @media (max-width: 768px) {
@@ -349,7 +335,7 @@
   }
 
   .chat-input-box {
-    border-radius: 22px;
+    border-radius: 26px;
     padding: 8px 10px;
   }
 }
