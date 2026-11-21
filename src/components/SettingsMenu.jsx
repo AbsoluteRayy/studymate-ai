@@ -1,3 +1,4 @@
+import "./SettingsMenu.css";
 import { useEffect, useRef, useState } from "react";
 
 function SettingsMenu({ aiMode, onSwitchMode }) {
