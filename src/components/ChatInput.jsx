@@ -279,8 +279,8 @@ function ChatInput({ onSend, onStop, isGenerating, onPreviewImage, aiMode }) {
             rows={1}
             placeholder={
               aiMode === "general"
-                ? "Tanya StudyMate"
-                : "Tanya StudyMate"
+                ? "Ask StudyMate Database"
+                : "Ask StudyMate General"
             }
             value={text}
             onChange={handleTextareaChange}
