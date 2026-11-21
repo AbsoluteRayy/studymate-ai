@@ -1132,10 +1132,17 @@ Buatkan:
 
               {loading && streamingChatId === currentChatId && (
                 <div className="message-row ai">
-                  <div className="typing">
-                    <span></span>
-                    <span></span>
-                    <span></span>
+                  <div className="ai-thinking-wrapper anim-allow">
+                    <div className="typing anim-allow">
+                      <span className="anim-allow"></span>
+                      <span className="anim-allow"></span>
+                      <span className="anim-allow"></span>
+                    </div>
+                    <span className="ai-thinking-label anim-allow">
+                      {isGeneral
+                        ? "StudyMate sedang berpikir..."
+                        : "Menganalisis struktur basis data..."}
+                    </span>
                   </div>
                 </div>
               )}

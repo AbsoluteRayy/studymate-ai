@@ -1023,39 +1023,110 @@
 }
 
 /* =========================
-   Typing Indicator
+   Typing / AI Thinking Indicator (Elastic Wave + Glow + Shimmer)
 ========================= */
 
+.ai-thinking-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+  border-radius: 9999px;
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.chat-window.dark .ai-thinking-wrapper {
+  background: #2b2e45;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+}
+
+.app.mode-general .chat-window.dark .ai-thinking-wrapper {
+  background: #2e231f;
+}
+
 .typing {
-  display: flex;
-  gap: 7px;
-  padding: 10px 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
 }
 
 .typing span {
   width: 9px;
   height: 9px;
-  background: var(--accent-secondary);
+  background: var(--accent-gradient);
   border-radius: 50%;
-  animation: typing 1.2s infinite !important;
+  display: inline-block;
+  box-shadow: 0 0 10px var(--accent-glow);
+  animation: aiDotWave 1.35s cubic-bezier(0.36, 0.07, 0.19, 0.97) infinite !important;
+}
+
+.typing span:nth-child(1) {
+  animation-delay: 0s !important;
 }
 
 .typing span:nth-child(2) {
-  animation-delay: 0.2s !important;
+  animation-delay: 0.18s !important;
 }
 
 .typing span:nth-child(3) {
-  animation-delay: 0.4s !important;
+  animation-delay: 0.36s !important;
 }
 
-@keyframes typing {
-  0%, 80%, 100% {
-    transform: translateY(0);
-    opacity: 0.3;
+@keyframes aiDotWave {
+  0%, 70%, 100% {
+    transform: translateY(0) scale(0.82);
+    opacity: 0.4;
+    box-shadow: 0 0 0 transparent;
   }
-  40% {
-    transform: translateY(-6px);
+  35% {
+    transform: translateY(-7px) scale(1.22);
     opacity: 1;
+    box-shadow: 0 6px 14px var(--accent-glow);
+  }
+}
+
+.ai-thinking-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  background: linear-gradient(
+    90deg,
+    var(--accent-primary) 0%,
+    var(--accent-secondary) 45%,
+    #ffffff 50%,
+    var(--accent-secondary) 55%,
+    var(--accent-primary) 100%
+  );
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: thinkingShimmer 2.2s linear infinite !important;
+}
+
+.chat-window:not(.dark) .ai-thinking-label {
+  background: linear-gradient(
+    90deg,
+    var(--accent-primary) 0%,
+    var(--accent-secondary) 45%,
+    #1f1f1f 50%,
+    var(--accent-secondary) 55%,
+    var(--accent-primary) 100%
+  );
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@keyframes thinkingShimmer {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
   }
 }
 
