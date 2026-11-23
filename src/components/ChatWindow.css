@@ -233,14 +233,14 @@
   color: #cbbab2;
 }
 
-/* CHAT AREA & MESSAGE ROW */
+/* CHAT AREA & MESSAGE ROW (padding-top memberi ruang header glass di atasnya) */
 .chat-area {
   flex: 1 1 auto;
   min-width: 0;
   width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 28px 0 32px;
+  padding: 84px 0 32px;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -308,11 +308,11 @@
 @media (max-width: 768px) {
   .scroll-to-bottom-btn { bottom: 12px; width: 36px; height: 36px; }
   .chat-area.empty-state { justify-content: flex-start; }
-  .welcome-container { padding: 24px 24px 20px; gap: 22px; }
+  .welcome-container { padding: 12px 24px 20px; gap: 22px; }
   .welcome h1 { font-size: 31px; }
   .welcome-subtitle { margin-top: 10px; font-size: 16px; }
   .quick-prompts-grid { grid-template-columns: 1fr; gap: 10px; }
-  .chat-area { padding: 18px 0 28px; }
+  .chat-area { padding: 72px 0 28px; }
   .message-row { padding: 0 24px; margin-bottom: 20px; }
   .user-message-container { max-width: 82%; }
   .user-message-toolbar, .message-toolbar { opacity: 1; }
@@ -320,7 +320,7 @@
 }
 
 @media (max-width: 480px) {
-  .welcome-container { padding: 22px 22px 18px; }
+  .welcome-container { padding: 10px 22px 18px; }
   .welcome h1 { font-size: 29px; }
   .message-row { padding: 0 22px; }
   .user-message-container { max-width: 85%; }

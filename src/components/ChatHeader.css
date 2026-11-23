@@ -6,28 +6,30 @@
   padding: 12px 20px 12px 16px;
   height: 68px;
   min-height: 68px;
-  background: rgba(244, 244, 247, 0.92);
-  backdrop-filter: blur(10px);
+  background: rgba(244, 244, 247, 0.58);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
   border-bottom: none;
-  position: sticky;
+  position: absolute;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 40;
   width: 100%;
   min-width: 0;
-  flex-shrink: 0;
   box-sizing: border-box;
 }
 
 .app.mode-general .chat-header {
-  background: rgba(247, 244, 241, 0.92);
+  background: rgba(247, 244, 241, 0.58);
 }
 
 .chat-window.dark .chat-header {
-  background: rgba(28, 29, 43, 0.92);
+  background: rgba(28, 29, 43, 0.56);
 }
 
 .app.mode-general .chat-window.dark .chat-header {
-  background: rgba(26, 22, 20, 0.92);
+  background: rgba(26, 22, 20, 0.56);
 }
 
 .chat-header-left {
@@ -127,7 +129,9 @@
   font-weight: 600;
   font-family: inherit;
   color: #202123;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: none;
   outline: none;
   padding: 0 16px;
@@ -136,17 +140,17 @@
   min-width: 0;
   max-width: min(400px, 100%);
   overflow: hidden;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
 .chat-window.dark .chat-header-title {
   color: #f5f6fb;
-  background: #333650;
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.28);
+  background: rgba(51, 54, 80, 0.78);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 
 .app.mode-general .chat-window.dark .chat-header-title {
-  background: #362924;
+  background: rgba(54, 41, 36, 0.78);
   color: #f7efe9;
 }
 
@@ -160,17 +164,17 @@
 }
 
 .chat-header-title:hover {
-  background: #ededf5;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.11);
+  background: rgba(237, 237, 245, 0.92);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
 }
 
 .chat-window.dark .chat-header-title:hover {
-  background: #3f4363;
-  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.36);
+  background: rgba(63, 67, 99, 0.92);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.38);
 }
 
 .app.mode-general .chat-window.dark .chat-header-title:hover {
-  background: #44342e;
+  background: rgba(68, 52, 46, 0.92);
 }
 
 .header-dots-icon {
@@ -192,7 +196,7 @@
   font-weight: 600;
   font-family: inherit;
   color: #202123;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.9);
   border: none;
   padding: 0 16px;
   border-radius: 9999px;
@@ -205,12 +209,12 @@
 
 .chat-window.dark .header-rename-input {
   color: #ffffff;
-  background: #333650;
+  background: rgba(51, 54, 80, 0.9);
   box-shadow: 0 4px 18px var(--accent-glow);
 }
 
 .app.mode-general .chat-window.dark .header-rename-input {
-  background: #362924;
+  background: rgba(54, 41, 36, 0.9);
 }
 
 .header-dropdown-menu {
@@ -218,7 +222,9 @@
   top: calc(100% + 6px);
   left: 0;
   min-width: 185px;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: none;
   border-radius: 18px;
   padding: 6px;
@@ -230,12 +236,12 @@
 }
 
 .chat-window.dark .header-dropdown-menu {
-  background: #333650;
+  background: rgba(51, 54, 80, 0.92);
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
 }
 
 .app.mode-general .chat-window.dark .header-dropdown-menu {
-  background: #362924;
+  background: rgba(54, 41, 36, 0.92);
 }
 
 .header-dropdown-item {
@@ -293,7 +299,9 @@
   gap: 8px;
   height: 40px;
   padding: 0 16px;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: none;
   outline: none;
   border-radius: 9999px;
@@ -304,7 +312,7 @@
   cursor: pointer;
   flex-shrink: 0;
   white-space: nowrap;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
 .theme-toggle-btn svg {
@@ -314,31 +322,31 @@
 .theme-toggle-btn:hover {
   color: var(--accent-primary);
   background: var(--accent-hover-light);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.11);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
 }
 
 .chat-window.dark .theme-toggle-btn {
-  background: #333650;
+  background: rgba(51, 54, 80, 0.78);
   color: #f5f6fb;
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 
 .app.mode-general .chat-window.dark .theme-toggle-btn {
-  background: #362924;
+  background: rgba(54, 41, 36, 0.78);
   color: #f7efe9;
 }
 
 .chat-window.dark .theme-toggle-btn:hover {
-  background: #3f4363;
+  background: rgba(63, 67, 99, 0.92);
   color: #ffffff;
-  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.36);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.38);
 }
 
 .app.mode-general .chat-window.dark .theme-toggle-btn:hover {
-  background: #44342e;
+  background: rgba(68, 52, 46, 0.92);
 }
 
-/* Mobile & Zoom >= 250%: Kunci Tinggi Identik dengan .sidebar.mobile-drawer (58px) */
+/* Mobile & Zoom >= 250% */
 @media (max-width: 768px) {
   .chat-header {
     padding: 9px 16px 9px 14px;
