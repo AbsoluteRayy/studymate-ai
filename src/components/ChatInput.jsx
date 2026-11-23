@@ -74,7 +74,7 @@ function compressImageToDataUrl(file) {
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
-        const maxDim = 1080;
+        const maxDim = 800;
         let { width, height } = img;
 
         if (width > maxDim || height > maxDim) {
@@ -95,15 +95,18 @@ function compressImageToDataUrl(file) {
         ctx.drawImage(img, 0, 0, width, height);
 
         if (supportsTransparency) {
-          const pngDataUrl = canvas.toDataURL("image/png");
-          // Jika ukuran PNG terlalu besar (> ~1.5 MB), gunakan WebP yang tetap mendukung transparansi penuh
-          if (pngDataUrl.length > 2_000_000) {
-            resolve(canvas.toDataURL("image/webp", 0.9));
-          } else {
-            resolve(pngDataUrl);
+          // WebP mempertahankan alpha channel (transparan) dengan ukuran ~10x lebih kecil dari PNG
+          let webpUrl = canvas.toDataURL("image/webp", 0.82);
+          if (webpUrl.length > 350_000) {
+            webpUrl = canvas.toDataURL("image/webp", 0.65);
           }
+          resolve(webpUrl);
         } else {
-          resolve(canvas.toDataURL("image/jpeg", 0.85));
+          let jpegUrl = canvas.toDataURL("image/jpeg", 0.82);
+          if (jpegUrl.length > 350_000) {
+            jpegUrl = canvas.toDataURL("image/jpeg", 0.65);
+          }
+          resolve(jpegUrl);
         }
       };
       img.onerror = () => resolve(null);
@@ -121,6 +124,7 @@ const ChatInput = forwardRef(function ChatInput(
   const [text, setText] = useState("");
   const [images, setImages] = useState([]);
   const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
+  const [isProcessingFiles, setIsProcessingFiles] = useState(false);
 
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -134,14 +138,19 @@ const ChatInput = forwardRef(function ChatInput(
     );
     if (imageFiles.length === 0) return;
 
-    const compressedList = await Promise.all(
-      imageFiles.map((file) => compressImageToDataUrl(file))
-    );
-    const validUrls = compressedList.filter(Boolean);
+    setIsProcessingFiles(true);
+    try {
+      const compressedList = await Promise.all(
+        imageFiles.map((file) => compressImageToDataUrl(file))
+      );
+      const validUrls = compressedList.filter(Boolean);
 
-    if (validUrls.length > 0) {
-      setImages((prev) => [...prev, ...validUrls].slice(0, MAX_IMAGES));
-      textareaRef.current?.focus();
+      if (validUrls.length > 0) {
+        setImages((prev) => [...prev, ...validUrls].slice(0, MAX_IMAGES));
+        textareaRef.current?.focus();
+      }
+    } finally {
+      setIsProcessingFiles(false);
     }
   }
 
@@ -200,7 +209,7 @@ const ChatInput = forwardRef(function ChatInput(
 
   function handleSubmit(e) {
     e?.preventDefault();
-    if (isGenerating) return;
+    if (isGenerating || isProcessingFiles) return;
     if (!text.trim() && images.length === 0) return;
 
     onSend(text.trim(), images);
@@ -214,7 +223,7 @@ const ChatInput = forwardRef(function ChatInput(
   function handleKeyDown(e) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (!isGenerating) {
+      if (!isGenerating && !isProcessingFiles) {
         handleSubmit();
       }
     }
@@ -226,7 +235,10 @@ const ChatInput = forwardRef(function ChatInput(
     e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
   }
 
-  const canSend = !isGenerating && (text.trim().length > 0 || images.length > 0);
+  const canSend =
+    !isGenerating &&
+    !isProcessingFiles &&
+    (text.trim().length > 0 || images.length > 0);
 
   return (
     <div className="chat-input-container">

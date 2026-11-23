@@ -193,7 +193,6 @@ function ChatWindow({
     const userMessage = {
       sender: "user",
       text: cleanPrompt,
-      image: imageList[0] || null,
       images: imageList,
     };
 
@@ -224,7 +223,6 @@ function ChatWindow({
       await streamAIResponse(
         {
           prompt: cleanPrompt,
-          image: imageList[0] || null,
           images: imageList,
           history: previousHistory,
           sessionId: String(targetChatId),
@@ -267,7 +265,6 @@ function ChatWindow({
     const editedUserMessage = {
       sender: "user",
       text: trimmed,
-      image: preservedImages[0] || null,
       images: preservedImages,
     };
 
@@ -282,7 +279,6 @@ function ChatWindow({
       await streamAIResponse(
         {
           prompt: trimmed,
-          image: preservedImages[0] || null,
           images: preservedImages,
           history: keptBefore.map((m) => ({ sender: m.sender, text: m.text })),
           sessionId: String(targetChatId),
