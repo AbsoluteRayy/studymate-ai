@@ -3,8 +3,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 14px 20px 14px 16px;
-  min-height: 72px;
+  padding: 12px 20px 12px 16px;
+  height: 68px;
+  min-height: 68px;
   background: rgba(244, 244, 247, 0.92);
   backdrop-filter: blur(10px);
   border-bottom: none;
@@ -117,7 +118,6 @@
   min-width: 0;
 }
 
-/* Pill Judul Chat & Tombol Theme Dibuat Serasi Identik (Tinggi 40px, Font 15px) */
 .chat-header-title {
   display: inline-flex;
   align-items: center;
@@ -286,7 +286,6 @@
   flex-shrink: 0;
 }
 
-/* Tombol Theme Light / Dark Serasi Identik dengan Pill Judul Chat */
 .theme-toggle-btn {
   display: inline-flex;
   align-items: center;
@@ -337,4 +336,47 @@
 
 .app.mode-general .chat-window.dark .theme-toggle-btn:hover {
   background: #44342e;
+}
+
+/* Mobile & Zoom >= 250%: Kunci Tinggi Identik dengan .sidebar.mobile-drawer (58px) */
+@media (max-width: 768px) {
+  .chat-header {
+    padding: 9px 16px 9px 14px;
+    height: 58px;
+    min-height: 58px;
+    gap: 8px;
+  }
+
+  .chat-header-left,
+  .header-title-wrapper,
+  .chat-header-actions {
+    height: 40px;
+  }
+
+  .header-sidebar-btn {
+    width: 34px;
+    height: 34px;
+  }
+
+  .chat-header-title,
+  .header-rename-input,
+  .theme-toggle-btn {
+    height: 38px;
+    font-size: 14.5px;
+  }
+}
+
+@media (max-width: 480px) {
+  .chat-header {
+    padding: 9px 14px;
+  }
+
+  .theme-toggle-label {
+    display: none;
+  }
+
+  .theme-toggle-btn {
+    width: 38px;
+    padding: 0;
+  }
 }
