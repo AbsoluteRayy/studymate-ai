@@ -1,0 +1,301 @@
+.quiz-interactive-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  margin: 6px 0 8px;
+}
+
+.quiz-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px 18px;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+.chat-window.dark .quiz-header-bar {
+  background: #2b2e45;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+}
+
+.app.mode-general .chat-window.dark .quiz-header-bar {
+  background: #2e231f;
+}
+
+.quiz-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.quiz-badge {
+  display: inline-block;
+  width: fit-content;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--accent-soft-bg);
+  color: var(--accent-primary);
+}
+
+.chat-window.dark .quiz-badge {
+  background: var(--accent-soft-bg-dark);
+  color: var(--accent-badge-text-dark);
+}
+
+.quiz-main-title {
+  margin: 0 !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+}
+
+.quiz-progress-pill {
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.05);
+  color: #444;
+}
+
+.chat-window.dark .quiz-progress-pill {
+  background: rgba(255, 255, 255, 0.09);
+  color: #e4e7f7;
+}
+
+/* Kotak Per Nomor Soal */
+.quiz-questions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.quiz-question-box {
+  background: #ffffff;
+  border-radius: 24px;
+  padding: 18px 20px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.chat-window.dark .quiz-question-box {
+  background: #2b2e45;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+}
+
+.app.mode-general .chat-window.dark .quiz-question-box {
+  background: #2e231f;
+}
+
+.quiz-question-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quiz-number-pill {
+  display: inline-block;
+  width: fit-content;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 12.5px;
+  font-weight: 700;
+  background: var(--accent-soft-bg);
+  color: var(--accent-primary);
+}
+
+.chat-window.dark .quiz-number-pill {
+  background: var(--accent-soft-bg-dark);
+  color: var(--accent-badge-text-dark);
+}
+
+.quiz-question-text {
+  margin: 0 !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  line-height: 1.55 !important;
+  color: #1f1f1f;
+}
+
+.chat-window.dark .quiz-question-text {
+  color: #ffffff;
+}
+
+/* Kotak Pilihan Ganda di Bawah Soal */
+.quiz-options-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 18px;
+  background: #f5f5f8;
+}
+
+.chat-window.dark .quiz-options-box {
+  background: #222538;
+}
+
+.app.mode-general .chat-window.dark .quiz-options-box {
+  background: #241b18;
+}
+
+.quiz-option-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 16px;
+  border: none;
+  outline: none;
+  border-radius: 9999px;
+  background: #ffffff;
+  color: #202123;
+  font-size: 15px;
+  font-weight: 500;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.chat-window.dark .quiz-option-item {
+  background: #333650;
+  color: #ececf1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+}
+
+.app.mode-general .chat-window.dark .quiz-option-item {
+  background: #362924;
+  color: #f7efe9;
+}
+
+.quiz-option-item:hover:not(:disabled) {
+  background: var(--accent-hover-light);
+  color: var(--accent-primary);
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+.chat-window.dark .quiz-option-item:hover:not(:disabled) {
+  background: #3f4363;
+  color: #ffffff;
+}
+
+.app.mode-general .chat-window.dark .quiz-option-item:hover:not(:disabled) {
+  background: #44342e;
+}
+
+.quiz-option-item.selected {
+  background: var(--accent-gradient) !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  box-shadow: 0 5px 16px var(--accent-glow);
+}
+
+.quiz-option-item.locked {
+  cursor: default;
+  opacity: 0.9;
+}
+
+.quiz-option-radio {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.08);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.chat-window.dark .quiz-option-radio {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.quiz-option-item.selected .quiz-option-radio {
+  background: #ffffff;
+}
+
+.quiz-option-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+}
+
+.quiz-option-key {
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.quiz-option-text {
+  flex: 1;
+  line-height: 1.45;
+}
+
+/* Tombol Kumpulkan Jawaban */
+.quiz-footer-actions {
+  margin-top: 4px;
+}
+
+.quiz-submit-btn {
+  width: 100%;
+  padding: 13px 20px;
+  border: none;
+  outline: none;
+  border-radius: 9999px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  background: #e2e2ea;
+  color: #6b6b76;
+  cursor: not-allowed;
+}
+
+.chat-window.dark .quiz-submit-btn {
+  background: #333650;
+  color: #9ca1ba;
+}
+
+.app.mode-general .chat-window.dark .quiz-submit-btn {
+  background: #362924;
+  color: #cbbab2;
+}
+
+.quiz-submit-btn.ready {
+  background: var(--accent-gradient) !important;
+  color: #ffffff !important;
+  cursor: pointer;
+  box-shadow: 0 6px 20px var(--accent-glow);
+}
+
+.quiz-submit-btn.ready:hover {
+  background: var(--accent-gradient-hover) !important;
+  box-shadow: 0 8px 24px var(--accent-glow);
+}
+
+.quiz-submit-btn.submitted {
+  background: rgba(16, 185, 129, 0.18) !important;
+  color: #10b981 !important;
+  cursor: default;
+}
+
+@media (max-width: 768px) {
+  .quiz-question-box {
+    padding: 15px 16px;
+    border-radius: 20px;
+  }
+
+  .quiz-option-item {
+    padding: 10px 14px;
+    font-size: 14.5px;
+    border-radius: 18px;
+  }
+}

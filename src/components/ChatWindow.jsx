@@ -253,7 +253,21 @@ function ChatWindow({
 
     try {
       const domainLabel = isGeneral ? "materi" : "materi Basis Data";
-      const prompt = `Berdasarkan ${domainLabel} berikut:\n\n${content}\n\nBuatkan:\n1. 5 soal pilihan ganda yang relevan dengan pembahasan di atas.\n2. Setiap soal memiliki 4 opsi (A, B, C, D).\n3. Sertakan kunci jawaban dan pembahasan singkat.\n4. Gunakan Bahasa Indonesia.\n5. Tingkat kesulitan sedang (level mahasiswa).`;
+      const prompt = `Berdasarkan ${domainLabel} berikut:
+
+${content}
+
+Buatkan 5 soal latihan pilihan ganda dalam Bahasa Indonesia (tingkat kesulitan level mahasiswa).
+
+ATURAN FORMAT WAJIB:
+1. HANYA tampilkan pertanyaan dan pilihan jawaban (A, B, C, D).
+2. DILARANG KERAS menampilkan kunci jawaban, tanda centang, atau pembahasan sekarang (tunggu pengguna mengumpulkan jawabannya terlebih dahulu).
+3. Gunakan format persis seperti ini untuk setiap nomor:
+1. Teks pertanyaan?
+A. Pilihan A
+B. Pilihan B
+C. Pilihan C
+D. Pilihan D`;
 
       await streamAIResponse(
         {
@@ -372,6 +386,7 @@ function ChatWindow({
                   copiedIndex={copiedIndex}
                   onCopy={handleCopy}
                   onGenerateQuiz={handleGenerateQuiz}
+                  onSubmitQuizAnswers={handleSend}
                   onExportPDF={() =>
                     exportChatToPDF(messages, currentTitle, isGeneral)
                   }

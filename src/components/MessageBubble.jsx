@@ -1,6 +1,7 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import CodeBlock from "./CodeBlock";
+import QuizCard, { parseQuizFromMarkdown } from "./QuizCard";
 
 function formatMarkdownTables(text) {
   if (!text) return "";
@@ -23,6 +24,7 @@ function MessageBubble({
   copiedIndex,
   onCopy,
   onGenerateQuiz,
+  onSubmitQuizAnswers,
   onExportPDF,
   onPreviewImage,
 }) {
@@ -109,17 +111,29 @@ function MessageBubble({
     );
   }
 
+  const parsedQuiz = !isCurrentlyStreamingMsg
+    ? parseQuizFromMarkdown(msg.text)
+    : null;
+
   return (
     <div className="message-row ai">
       <div className="ai-message">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          components={{
-            pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
-          }}
-        >
-          {formatMarkdownTables(msg.text)}
-        </ReactMarkdown>
+        {parsedQuiz ? (
+          <QuizCard
+            quizData={parsedQuiz}
+            onSubmitAnswers={onSubmitQuizAnswers}
+            disabled={isBusy}
+          />
+        ) : (
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
+            }}
+          >
+            {formatMarkdownTables(msg.text)}
+          </ReactMarkdown>
+        )}
 
         {!isCurrentlyStreamingMsg && (
           <div className="message-toolbar">

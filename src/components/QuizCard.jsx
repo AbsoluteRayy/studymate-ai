@@ -1,0 +1,183 @@
+import { useMemo, useState } from "react";
+import "./QuizCard.css";
+
+/**
+ * Mem-parsing blok soal pilihan ganda dari teks AI menjadi objek terstruktur:
+ * [{ number: 1, question: "...", options: [{ key: "A", text: "..." }, ...] }, ...]
+ */
+export function parseQuizFromMarkdown(text) {
+  if (!text) return null;
+
+  const lines = text.split("\n");
+  const questions = [];
+  let currentQ = null;
+  let introLines = [];
+  let hasStartedQuestions = false;
+
+  const questionRegex = /^(?:###\s*)?(?:\*\*)?(?:Nomor\s*)?(\d+)[.)]\s*(?:\*\*)?\s*(.+)$/i;
+  const optionRegex = /^(?:[-*]\s*)?(?:\*\*)?([A-E])[.)]\s*(?:\*\*)?\s*(.+)$/i;
+
+  for (let rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    // Abaikan baris judul markdown "# Quiz..." agar tidak mengganggu intro
+    if (!hasStartedQuestions && line.startsWith("#")) {
+      introLines.push(line.replace(/^#+\s*/, ""));
+      continue;
+    }
+
+    const qMatch = line.match(questionRegex);
+    if (qMatch && !line.match(/^[A-E][.)]/i)) {
+      // Pastikan baris berikutnya atau struktur ini memang soal pilihan ganda
+      if (currentQ && currentQ.options.length >= 2) {
+        questions.push(currentQ);
+      }
+      hasStartedQuestions = true;
+      currentQ = {
+        number: Number(qMatch[1]),
+        question: qMatch[2].replace(/\*\*/g, "").trim(),
+        options: [],
+      };
+      continue;
+    }
+
+    const optMatch = line.match(optionRegex);
+    if (optMatch && currentQ) {
+      currentQ.options.push({
+        key: optMatch[1].toUpperCase(),
+        text: optMatch[2].replace(/\*\*/g, "").trim(),
+      });
+      continue;
+    }
+
+    if (currentQ && currentQ.options.length === 0) {
+      // Lanjutan teks pertanyaan multi-baris
+      currentQ.question += " " + line.replace(/\*\*/g, "");
+    } else if (!hasStartedQuestions) {
+      introLines.push(line.replace(/\*\*/g, ""));
+    }
+  }
+
+  if (currentQ && currentQ.options.length >= 2) {
+    questions.push(currentQ);
+  }
+
+  // Hanya aktifkan UI Quiz Interaktif jika minimal ada 2 soal pilihan ganda yang valid
+  if (questions.length < 2) return null;
+
+  return {
+    title: introLines[0] || "Latihan Soal Pilihan Ganda",
+    questions,
+  };
+}
+
+function QuizCard({ quizData, onSubmitAnswers, disabled }) {
+  const [selectedAnswers, setSelectedAnswers] = useState({});
+  const [isSubmitted, setIsSubmitted] = useState(false);
+
+  const totalQuestions = quizData.questions.length;
+  const answeredCount = useMemo(
+    () => Object.keys(selectedAnswers).length,
+    [selectedAnswers]
+  );
+
+  const allAnswered = answeredCount === totalQuestions;
+
+  function handleSelectOption(questionNumber, optionKey) {
+    if (isSubmitted || disabled) return;
+    setSelectedAnswers((prev) => ({
+      ...prev,
+      [questionNumber]: optionKey,
+    }));
+  }
+
+  function handleSubmit() {
+    if (!allAnswered || isSubmitted || disabled) return;
+    setIsSubmitted(true);
+
+    // Format jawaban pengguna untuk dikirim ke AI agar dinilai & diberi skor
+    const formattedSubmission = quizData.questions
+      .map((q) => {
+        const chosenKey = selectedAnswers[q.number];
+        const chosenOpt = q.options.find((o) => o.key === chosenKey);
+        return `${q.number}. ${chosenKey}${chosenOpt ? ` (${chosenOpt.text})` : ""}`;
+      })
+      .join("\n");
+
+    const evaluationPrompt = `Ini jawaban quiz saya:\n\n${formattedSubmission}\n\nTolong periksa semua jawaban saya berdasarkan soal quiz sebelumnya! Berikan:\n1. **Skor Nilai** (skala 0–100)\n2. **Rekap Jumlah Benar & Salah** (contoh: Benar X dari ${totalQuestions} soal)\n3. ** Koreksi & Pembahasan Singkat** untuk setiap nomor (tandai mana yang Benar ✅ dan mana yang Salah ❌ beserta jawaban yang seharusnya).`;
+
+    onSubmitAnswers(evaluationPrompt);
+  }
+
+  return (
+    <div className="quiz-interactive-container">
+      <div className="quiz-header-bar">
+        <div className="quiz-header-info">
+          <span className="quiz-badge">Quiz Interaktif</span>
+          <h3 className="quiz-main-title">{quizData.title}</h3>
+        </div>
+        <div className="quiz-progress-pill">
+          Terjawab {answeredCount} / {totalQuestions}
+        </div>
+      </div>
+
+      <div className="quiz-questions-list">
+        {quizData.questions.map((q) => {
+          const chosen = selectedAnswers[q.number];
+
+          return (
+            <div key={q.number} className="quiz-question-box">
+              <div className="quiz-question-header">
+                <span className="quiz-number-pill">Nomor {q.number}</span>
+                <p className="quiz-question-text">{q.question}</p>
+              </div>
+
+              <div className="quiz-options-box">
+                {q.options.map((opt) => {
+                  const isSelected = chosen === opt.key;
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      className={`quiz-option-item ${
+                        isSelected ? "selected" : ""
+                      } ${isSubmitted ? "locked" : ""}`}
+                      onClick={() => handleSelectOption(q.number, opt.key)}
+                      disabled={isSubmitted || disabled}
+                    >
+                      <span className="quiz-option-radio">
+                        {isSelected && <span className="quiz-option-dot" />}
+                      </span>
+                      <span className="quiz-option-key">{opt.key}.</span>
+                      <span className="quiz-option-text">{opt.text}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="quiz-footer-actions">
+        <button
+          type="button"
+          className={`quiz-submit-btn ${
+            isSubmitted ? "submitted" : allAnswered ? "ready" : ""
+          }`}
+          onClick={handleSubmit}
+          disabled={!allAnswered || isSubmitted || disabled}
+        >
+          {isSubmitted
+            ? "Jawaban Terkumpul — Lihat Penilaian di Bawah"
+            : allAnswered
+            ? "Kumpulkan Jawaban"
+            : `Jawab Semua Soal (${answeredCount}/${totalQuestions})`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default QuizCard;
