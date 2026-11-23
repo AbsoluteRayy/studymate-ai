@@ -1,103 +1,109 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
 export function useChatStream({ setMessages, onUpdateTitle }) {
-  const abortControllerRef = useRef(null);
-  const typingIntervalRef = useRef(null);
-  const tokenQueueRef = useRef("");
-  const streamFinishedRef = useRef(false);
-  const pendingTitleRef = useRef(null);
-
   const [loading, setLoading] = useState(false);
   const [streamingChatId, setStreamingChatId] = useState(null);
 
-  useEffect(() => {
-    return () => {
-      if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
-      if (abortControllerRef.current) abortControllerRef.current.abort();
-    };
-  }, []);
+  const abortControllerRef = useRef(null);
+  const rafIdRef = useRef(null);
 
   function stopGenerating() {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
-    if (typingIntervalRef.current) {
-      clearInterval(typingIntervalRef.current);
-      typingIntervalRef.current = null;
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
     }
-    tokenQueueRef.current = "";
-    streamFinishedRef.current = true;
     setLoading(false);
     setStreamingChatId(null);
   }
 
-  async function streamAIResponse(payload, targetChatId, prefixText = "") {
-    if (typingIntervalRef.current) {
-      clearInterval(typingIntervalRef.current);
-      typingIntervalRef.current = null;
+  async function streamAIResponse(payload, targetChatId, initialPrefix = "") {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
     }
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    tokenQueueRef.current = "";
-    streamFinishedRef.current = false;
-    pendingTitleRef.current = null;
+    let pendingQueue = initialPrefix || "";
+    let displayedText = "";
+    let isAiBubbleCreated = false;
+    let streamFinished = false;
+    let receivedTitle = null;
 
-    let displayedText = prefixText;
-    let receivedAnyToken = false;
+    function appendChunkToMessage(chunk) {
+      if (!chunk) return;
+      displayedText += chunk;
 
-    const startTypewriterLoop = () => {
-      if (typingIntervalRef.current) return;
+      if (!isAiBubbleCreated) {
+        isAiBubbleCreated = true;
+        setLoading(false);
+        setMessages((prev) => [...prev, { sender: "ai", text: displayedText }]);
+      } else {
+        setMessages((prev) => {
+          if (prev.length === 0) return [{ sender: "ai", text: displayedText }];
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            ...updated[updated.length - 1],
+            sender: "ai",
+            text: displayedText,
+          };
+          return updated;
+        });
+      }
+    }
 
-      typingIntervalRef.current = setInterval(() => {
-        if (tokenQueueRef.current.length > 0) {
-          const step = tokenQueueRef.current.length > 350 ? 20 : 12;
-          const nextSlice = tokenQueueRef.current.slice(0, step);
-          tokenQueueRef.current = tokenQueueRef.current.slice(step);
-          displayedText += nextSlice;
-
-          setLoading(false);
-          const currentText = displayedText;
-
-          setMessages((prev) => {
-            const updated = [...prev];
-            const lastIdx = updated.length - 1;
-            if (lastIdx >= 0 && updated[lastIdx].sender === "ai") {
-              updated[lastIdx] = { ...updated[lastIdx], text: currentText };
-            } else {
-              updated.push({ sender: "ai", text: currentText });
-            }
-            return updated;
-          });
-        } else if (streamFinishedRef.current) {
-          clearInterval(typingIntervalRef.current);
-          typingIntervalRef.current = null;
-
-          if (!receivedAnyToken && !controller.signal.aborted) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                sender: "ai",
-                text: "Maaf, tidak ada respons yang diterima dari server AI. Silakan coba kirim ulang.",
-              },
-            ]);
-          }
-
-          if (pendingTitleRef.current) {
-            onUpdateTitle(targetChatId, pendingTitleRef.current, false);
-            pendingTitleRef.current = null;
-          }
-
-          setLoading(false);
-          setStreamingChatId(null);
+    // Loop ketik adaptif 60fps: halus saat antrean pendek, ngebut otomatis saat antrean panjang
+    const typingPromise = new Promise((resolve) => {
+      function tick() {
+        if (controller.signal.aborted) {
+          rafIdRef.current = null;
+          resolve();
+          return;
         }
-      }, 10);
-    };
+
+        if (pendingQueue.length > 0) {
+          // Ambil minimal 6 karakter atau 1/8 dari sisa antrean agar tidak pernah tertinggal
+          let sliceLen = Math.max(6, Math.ceil(pendingQueue.length / 8));
+
+          // Potong di batas spasi terdekat agar kata tidak terbelah setengah
+          if (sliceLen < pendingQueue.length) {
+            const nextSpace = pendingQueue.indexOf(" ", sliceLen);
+            if (nextSpace !== -1 && nextSpace - sliceLen <= 12) {
+              sliceLen = nextSpace + 1;
+            }
+          } else {
+            sliceLen = pendingQueue.length;
+          }
+
+          const chunk = pendingQueue.slice(0, sliceLen);
+          pendingQueue = pendingQueue.slice(sliceLen);
+          appendChunkToMessage(chunk);
+        }
+
+        if (streamFinished && pendingQueue.length === 0) {
+          rafIdRef.current = null;
+          resolve();
+          return;
+        }
+
+        rafIdRef.current = requestAnimationFrame(tick);
+      }
+
+      rafIdRef.current = requestAnimationFrame(tick);
+    });
 
     try {
-      const response = await fetch("/chat", {
+      const response = await fetch(`${API_BASE_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -105,59 +111,74 @@ export function useChatStream({ setMessages, onUpdateTitle }) {
       });
 
       if (!response.ok || !response.body) {
-        throw new Error(`Gagal terhubung ke server AI (HTTP ${response.status}).`);
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(
+          errData.error || `Gagal terhubung ke server (${response.status})`
+        );
       }
-
-      startTypewriterLoop();
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
-      let buffer = "";
+      let sseBuffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split("\n\n");
-        buffer = events.pop() || "";
+        sseBuffer += decoder.decode(value, { stream: true });
+        const events = sseBuffer.split("\n\n");
+        sseBuffer = events.pop() || "";
 
-        for (const event of events) {
-          const line = event.trim();
-          if (!line.startsWith("data: ")) continue;
+        for (const eventBlock of events) {
+          const lines = eventBlock.split("\n");
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data: ")) continue;
+            const jsonStr = trimmed.slice(6);
 
-          const dataStr = line.slice(6);
-          let parsed;
-          try {
-            parsed = JSON.parse(dataStr);
-          } catch {
-            continue;
-          }
-
-          if (parsed.error) throw new Error(parsed.error);
-
-          if (parsed.token) {
-            receivedAnyToken = true;
-            tokenQueueRef.current += parsed.token;
-          }
-
-          if (parsed.done && parsed.title) {
-            pendingTitleRef.current = parsed.title;
+            try {
+              const parsed = JSON.parse(jsonStr);
+              if (parsed.error) {
+                throw new Error(parsed.error);
+              }
+              if (parsed.token) {
+                pendingQueue += parsed.token;
+              }
+              if (parsed.title) {
+                receivedTitle = parsed.title;
+              }
+              if (parsed.done) {
+                streamFinished = true;
+              }
+            } catch (parseErr) {
+              if (parseErr.message && !jsonStr.startsWith("{")) {
+                continue;
+              }
+              if (parseErr.message?.startsWith("Error AI:")) {
+                throw parseErr;
+              }
+            }
           }
         }
       }
 
-      streamFinishedRef.current = true;
+      streamFinished = true;
+      await typingPromise;
+
+      if (receivedTitle && onUpdateTitle) {
+        onUpdateTitle(targetChatId, receivedTitle);
+      }
     } catch (err) {
-      if (err.name === "AbortError") {
-        streamFinishedRef.current = true;
-        return;
+      streamFinished = true;
+      if (err.name !== "AbortError") {
+        throw err;
       }
-      if (typingIntervalRef.current) {
-        clearInterval(typingIntervalRef.current);
-        typingIntervalRef.current = null;
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+        setLoading(false);
+        setStreamingChatId(null);
       }
-      throw err;
     }
   }
 

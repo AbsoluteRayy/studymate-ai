@@ -33,7 +33,7 @@ async function getDB() {
 }
 
 // ============================
-// Kumpulan Multi-API Key Groq (Untuk Teks: Qwen 3.8 27B)
+// Kumpulan Multi-API Key Groq (Untuk Teks)
 // ============================
 function getGroqApiKeys() {
   const keysFromList = (process.env.GROQ_API_KEYS || "")
@@ -211,7 +211,7 @@ Jawablah menggunakan Markdown yang rapi, jelas, terstruktur, dan langsung ke int
 `;
 
 // ============================
-// Chat Endpoint (Hybrid: Gemini Multi-Vision + Multi-Key Groq Qwen 3.8 | Dual Mode)
+// Chat Endpoint (Hybrid: Gemini Multi-Vision Stream + Multi-Key Groq | Dual Mode)
 // ============================
 app.post("/chat", async (req, res) => {
   const {
@@ -254,6 +254,7 @@ app.post("/chat", async (req, res) => {
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders?.();
 
   let responseClosed = false;
@@ -304,9 +305,8 @@ app.post("/chat", async (req, res) => {
         ? `${activeSystemPrompt}\n\nRiwayat percakapan sebelumnya:\n${historyContext}\n\nInstruksi / Pertanyaan Pengguna saat ini:\n${aiInstructionPrompt}`
         : `${activeSystemPrompt}\n\nInstruksi / Pertanyaan Pengguna:\n${aiInstructionPrompt}`;
 
+      // Langsung gunakan model aktif tercepat tanpa membuang waktu mencoba model 3.5 yang 404
       const geminiModels = [
-        "gemini-3.5-flash-lite",
-        "gemini-3.5-flash",
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
         "gemini-2.0-flash",
@@ -318,10 +318,10 @@ app.post("/chat", async (req, res) => {
       for (const modelName of geminiModels) {
         try {
           console.log(
-            `Mengirim ${rawImages.length} gambar ke Gemini Native (${modelName}) [mode: ${activeMode}]...`
+            `Streaming ${rawImages.length} gambar ke Gemini (${modelName}) [mode: ${activeMode}]...`
           );
           const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -339,28 +339,51 @@ app.post("/chat", async (req, res) => {
             }
           );
 
-          const geminiData = await geminiRes.json();
-
-          if (!geminiRes.ok) {
+          if (!geminiRes.ok || !geminiRes.body) {
+            const errData = await geminiRes.json().catch(() => ({}));
             lastErrMsg =
-              geminiData?.error?.message || `HTTP ${geminiRes.status}`;
+              errData?.error?.message || `HTTP ${geminiRes.status}`;
             console.warn(`⚠️ ${modelName} gagal: ${lastErrMsg}`);
             continue;
           }
 
-          fullReply =
-            geminiData?.candidates?.[0]?.content?.parts
-              ?.map((p) => p.text || "")
-              .join("") || "";
+          const reader = geminiRes.body.getReader();
+          const decoder = new TextDecoder("utf-8");
+          let buffer = "";
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (responseClosed) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed.startsWith("data: ")) continue;
+              const dataStr = trimmed.slice(6);
+              if (dataStr === "[DONE]") continue;
+
+              try {
+                const parsed = JSON.parse(dataStr);
+                const chunkText =
+                  parsed?.candidates?.[0]?.content?.parts
+                    ?.map((p) => p.text || "")
+                    .join("") || "";
+                if (chunkText) {
+                  fullReply += chunkText;
+                  res.write(`data: ${JSON.stringify({ token: chunkText })}\n\n`);
+                }
+              } catch {
+                // Abaikan chunk parsial
+              }
+            }
+          }
 
           if (fullReply) {
             geminiSuccess = true;
-            const words = fullReply.split(/(\s+)/);
-            for (let i = 0; i < words.length; i += 4) {
-              if (responseClosed) break;
-              const chunkText = words.slice(i, i + 4).join("");
-              res.write(`data: ${JSON.stringify({ token: chunkText })}\n\n`);
-            }
             break;
           }
         } catch (err) {
@@ -386,11 +409,11 @@ app.post("/chat", async (req, res) => {
       for (const { label, client } of groqClients) {
         try {
           console.log(
-            `Prompt (qwen/qwen3.8-27b via ${label}) [mode: ${activeMode}]:`,
+            `Prompt (llama-3.3-70b-versatile via ${label}) [mode: ${activeMode}]:`,
             aiInstructionPrompt
           );
           const stream = await client.chat.completions.create({
-            model: "qwen/qwen3.8-27b",
+            model: "llama-3.3-70b-versatile",
             messages: [
               { role: "system", content: activeSystemPrompt },
               ...formattedHistory,
