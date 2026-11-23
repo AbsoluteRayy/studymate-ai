@@ -2,7 +2,7 @@
   width: 100%;
   max-width: 780px;
   margin: 0 auto;
-  padding: 10px 24px 20px;
+  padding: 10px 24px calc(20px + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
   flex-shrink: 0;
 }
@@ -119,14 +119,17 @@
   flex-shrink: 0;
 }
 
+/* Tombol + Serasi Identik dengan Warna Tombol Kanan */
 .attach-plus-btn {
   width: 38px;
   height: 38px;
+  min-width: 38px;
+  min-height: 38px;
   border-radius: 9999px;
-  background: rgba(0, 0, 0, 0.06);
+  background-color: #e2e2ea;
   border: none;
   outline: none;
-  color: #333;
+  color: #5b5b66;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -136,17 +139,27 @@
 }
 
 .attach-plus-btn:hover:not(:disabled) {
-  background: var(--accent-soft-bg);
+  background-color: var(--accent-soft-bg);
   color: var(--accent-primary);
 }
 
 .chat-window.dark .attach-plus-btn {
-  background: rgba(255, 255, 255, 0.12);
-  color: #f3f4fb;
+  background-color: #464a6b;
+  color: #cfd3eb;
+}
+
+.app.mode-general .chat-window.dark .attach-plus-btn {
+  background-color: #4a3932;
+  color: #dfd0c8;
 }
 
 .chat-window.dark .attach-plus-btn:hover:not(:disabled) {
-  background: var(--accent-soft-bg-dark);
+  background-color: #53587e;
+  color: #ffffff;
+}
+
+.app.mode-general .chat-window.dark .attach-plus-btn:hover:not(:disabled) {
+  background-color: #59453d;
   color: #ffffff;
 }
 
@@ -340,7 +353,7 @@
 
 @media (max-width: 768px) {
   .chat-input-container {
-    padding: 8px 16px 14px;
+    padding: 8px 16px calc(14px + env(safe-area-inset-bottom, 0px));
   }
 
   .chat-input-box {
