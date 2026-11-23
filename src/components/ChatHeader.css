@@ -6,9 +6,7 @@
   padding: 12px 20px 12px 16px;
   height: 68px;
   min-height: 68px;
-  background: rgba(244, 244, 247, 0.58);
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  background: transparent;
   border-bottom: none;
   position: absolute;
   top: 0;
@@ -18,18 +16,68 @@
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
+  pointer-events: none;
 }
 
-.app.mode-general .chat-header {
-  background: rgba(247, 244, 241, 0.58);
+/* Progressive Glass Blur Fade (Bawah Bening -> Makin ke Atas Makin Blur) */
+.chat-header::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: -16px;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(244, 244, 247, 0.88) 0%,
+    rgba(244, 244, 247, 0.55) 55%,
+    rgba(244, 244, 247, 0) 100%
+  );
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.9) 42%,
+    rgba(0, 0, 0, 0.35) 75%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.9) 42%,
+    rgba(0, 0, 0, 0.35) 75%,
+    rgba(0, 0, 0, 0) 100%
+  );
 }
 
-.chat-window.dark .chat-header {
-  background: rgba(28, 29, 43, 0.56);
+.app.mode-general .chat-header::before {
+  background: linear-gradient(
+    to bottom,
+    rgba(247, 244, 241, 0.88) 0%,
+    rgba(247, 244, 241, 0.55) 55%,
+    rgba(247, 244, 241, 0) 100%
+  );
 }
 
-.app.mode-general .chat-window.dark .chat-header {
-  background: rgba(26, 22, 20, 0.56);
+.chat-window.dark .chat-header::before {
+  background: linear-gradient(
+    to bottom,
+    rgba(28, 29, 43, 0.88) 0%,
+    rgba(28, 29, 43, 0.52) 55%,
+    rgba(28, 29, 43, 0) 100%
+  );
+}
+
+.app.mode-general .chat-window.dark .chat-header::before {
+  background: linear-gradient(
+    to bottom,
+    rgba(26, 22, 20, 0.88) 0%,
+    rgba(26, 22, 20, 0.52) 55%,
+    rgba(26, 22, 20, 0) 100%
+  );
 }
 
 .chat-header-left {
@@ -40,6 +88,7 @@
   flex: 1 1 0%;
   min-width: 0;
   overflow: visible;
+  pointer-events: auto;
 }
 
 .header-sidebar-btn {
@@ -129,7 +178,7 @@
   font-weight: 600;
   font-family: inherit;
   color: #202123;
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: none;
@@ -145,12 +194,12 @@
 
 .chat-window.dark .chat-header-title {
   color: #f5f6fb;
-  background: rgba(51, 54, 80, 0.78);
+  background: rgba(51, 54, 80, 0.82);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 
 .app.mode-general .chat-window.dark .chat-header-title {
-  background: rgba(54, 41, 36, 0.78);
+  background: rgba(54, 41, 36, 0.82);
   color: #f7efe9;
 }
 
@@ -164,17 +213,17 @@
 }
 
 .chat-header-title:hover {
-  background: rgba(237, 237, 245, 0.92);
+  background: rgba(237, 237, 245, 0.95);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
 }
 
 .chat-window.dark .chat-header-title:hover {
-  background: rgba(63, 67, 99, 0.92);
+  background: rgba(63, 67, 99, 0.95);
   box-shadow: 0 5px 16px rgba(0, 0, 0, 0.38);
 }
 
 .app.mode-general .chat-window.dark .chat-header-title:hover {
-  background: rgba(68, 52, 46, 0.92);
+  background: rgba(68, 52, 46, 0.95);
 }
 
 .header-dots-icon {
@@ -196,7 +245,7 @@
   font-weight: 600;
   font-family: inherit;
   color: #202123;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.94);
   border: none;
   padding: 0 16px;
   border-radius: 9999px;
@@ -209,12 +258,12 @@
 
 .chat-window.dark .header-rename-input {
   color: #ffffff;
-  background: rgba(51, 54, 80, 0.9);
+  background: rgba(51, 54, 80, 0.94);
   box-shadow: 0 4px 18px var(--accent-glow);
 }
 
 .app.mode-general .chat-window.dark .header-rename-input {
-  background: rgba(54, 41, 36, 0.9);
+  background: rgba(54, 41, 36, 0.94);
 }
 
 .header-dropdown-menu {
@@ -222,7 +271,7 @@
   top: calc(100% + 6px);
   left: 0;
   min-width: 185px;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: none;
@@ -236,12 +285,12 @@
 }
 
 .chat-window.dark .header-dropdown-menu {
-  background: rgba(51, 54, 80, 0.92);
+  background: rgba(51, 54, 80, 0.94);
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
 }
 
 .app.mode-general .chat-window.dark .header-dropdown-menu {
-  background: rgba(54, 41, 36, 0.92);
+  background: rgba(54, 41, 36, 0.94);
 }
 
 .header-dropdown-item {
@@ -290,6 +339,7 @@
   align-items: center;
   height: 44px;
   flex-shrink: 0;
+  pointer-events: auto;
 }
 
 .theme-toggle-btn {
@@ -299,7 +349,7 @@
   gap: 8px;
   height: 40px;
   padding: 0 16px;
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: none;
@@ -326,24 +376,24 @@
 }
 
 .chat-window.dark .theme-toggle-btn {
-  background: rgba(51, 54, 80, 0.78);
+  background: rgba(51, 54, 80, 0.82);
   color: #f5f6fb;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 
 .app.mode-general .chat-window.dark .theme-toggle-btn {
-  background: rgba(54, 41, 36, 0.78);
+  background: rgba(54, 41, 36, 0.82);
   color: #f7efe9;
 }
 
 .chat-window.dark .theme-toggle-btn:hover {
-  background: rgba(63, 67, 99, 0.92);
+  background: rgba(63, 67, 99, 0.95);
   color: #ffffff;
   box-shadow: 0 5px 16px rgba(0, 0, 0, 0.38);
 }
 
 .app.mode-general .chat-window.dark .theme-toggle-btn:hover {
-  background: rgba(68, 52, 46, 0.92);
+  background: rgba(68, 52, 46, 0.95);
 }
 
 /* Mobile & Zoom >= 250% */
@@ -353,6 +403,10 @@
     height: 58px;
     min-height: 58px;
     gap: 8px;
+  }
+
+  .chat-header::before {
+    bottom: -14px;
   }
 
   .chat-header-left,
