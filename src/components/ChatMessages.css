@@ -19,14 +19,30 @@
   word-break: break-word;
 }
 
-.user-message-image {
+.user-message-images-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.user-message-images-grid.single .user-message-image {
   display: block;
   max-width: 280px;
   max-height: 240px;
   width: 100%;
   object-fit: cover;
   border-radius: 18px;
-  margin-bottom: 8px;
+  cursor: zoom-in;
+  border: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.user-message-images-grid.multi .user-message-image {
+  display: block;
+  width: 124px;
+  height: 124px;
+  object-fit: cover;
+  border-radius: 16px;
   cursor: zoom-in;
   border: none;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);

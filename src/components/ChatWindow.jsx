@@ -25,8 +25,10 @@ function ChatWindow({
   aiMode,
 }) {
   const chatAreaRef = useRef(null);
+  const chatInputRef = useRef(null);
   const scrollPositionsRef = useRef({});
   const activeChatIdRef = useRef(currentChatId);
+  const dragCounterRef = useRef(0);
 
   const [copiedIndex, setCopiedIndex] = useState(null);
   const [darkMode, setDarkMode] = useState(true);
@@ -35,6 +37,7 @@ function ChatWindow({
   const [editingMsgText, setEditingMsgText] = useState("");
   const [lightboxImage, setLightboxImage] = useState(null);
   const [isCustomRenamed, setIsCustomRenamed] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   const {
     loading,
@@ -125,14 +128,73 @@ function ChatWindow({
     setEditingMsgText("");
   }, [currentChatId]);
 
-  async function handleSend(prompt, image = null) {
+  const isBusy = loading || streamingChatId !== null;
+
+  // ============================
+  // Handler Drag-and-Drop Seluruh Area Chat
+  // ============================
+  function hasDraggedFiles(e) {
+    return Array.from(e.dataTransfer?.types || []).includes("Files");
+  }
+
+  function handleWindowDragEnter(e) {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current += 1;
+    if (!isBusy) {
+      setIsDraggingOver(true);
+    }
+  }
+
+  function handleWindowDragOver(e) {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = isBusy ? "none" : "copy";
+    }
+  }
+
+  function handleWindowDragLeave(e) {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setIsDraggingOver(false);
+    }
+  }
+
+  function handleWindowDrop(e) {
+    if (!hasDraggedFiles(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDraggingOver(false);
+
+    if (isBusy) return;
+    const droppedFiles = e.dataTransfer?.files;
+    if (droppedFiles && droppedFiles.length > 0) {
+      chatInputRef.current?.addFiles(droppedFiles);
+    }
+  }
+
+  async function handleSend(prompt, images = []) {
     const targetChatId = currentChatId;
     const cleanPrompt = (prompt || "").trim();
+    const imageList = Array.isArray(images)
+      ? images
+      : images
+      ? [images]
+      : [];
 
     const userMessage = {
       sender: "user",
       text: cleanPrompt,
-      image: image || null,
+      image: imageList[0] || null,
+      images: imageList,
     };
 
     const previousHistory = messages.map((m) => ({
@@ -162,7 +224,8 @@ function ChatWindow({
       await streamAIResponse(
         {
           prompt: cleanPrompt,
-          image,
+          image: imageList[0] || null,
+          images: imageList,
           history: previousHistory,
           sessionId: String(targetChatId),
           shouldUpdateTitle,
@@ -188,9 +251,15 @@ function ChatWindow({
   async function handleSaveEditMessage(index) {
     const trimmed = editingMsgText.trim();
     const originalMsg = messages[index];
-    if (!originalMsg || (!trimmed && !originalMsg.image)) return;
+    const preservedImages =
+      Array.isArray(originalMsg?.images) && originalMsg.images.length > 0
+        ? originalMsg.images
+        : originalMsg?.image
+        ? [originalMsg.image]
+        : [];
 
-    const preservedImage = originalMsg.image || null;
+    if (!originalMsg || (!trimmed && preservedImages.length === 0)) return;
+
     setEditingMsgIndex(null);
     setEditingMsgText("");
 
@@ -198,7 +267,8 @@ function ChatWindow({
     const editedUserMessage = {
       sender: "user",
       text: trimmed,
-      image: preservedImage,
+      image: preservedImages[0] || null,
+      images: preservedImages,
     };
 
     const targetChatId = currentChatId;
@@ -212,7 +282,8 @@ function ChatWindow({
       await streamAIResponse(
         {
           prompt: trimmed,
-          image: preservedImage,
+          image: preservedImages[0] || null,
+          images: preservedImages,
           history: keptBefore.map((m) => ({ sender: m.sender, text: m.text })),
           sessionId: String(targetChatId),
           shouldUpdateTitle,
@@ -290,11 +361,16 @@ D. Pilihan D`;
     }
   }
 
-  const isBusy = loading || streamingChatId !== null;
   const isEmptyState = messages.length === 0 && !loading;
 
   return (
-    <div className={`chat-window ${darkMode ? "dark" : "light"}`}>
+    <div
+      className={`chat-window ${darkMode ? "dark" : "light"}`}
+      onDragEnter={handleWindowDragEnter}
+      onDragOver={handleWindowDragOver}
+      onDragLeave={handleWindowDragLeave}
+      onDrop={handleWindowDrop}
+    >
       <ChatHeader
         isSidebarOpen={isSidebarOpen}
         onToggleSidebar={onToggleSidebar}
@@ -439,6 +515,34 @@ D. Pilihan D`;
         )}
       </div>
 
+      {/* Overlay Glassmorphic saat Menyeret Gambar dari Folder */}
+      {isDraggingOver && (
+        <div className="chat-drop-overlay">
+          <div className="chat-drop-card">
+            <div className="chat-drop-icon-circle">
+              <svg
+                width="30"
+                height="30"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="4" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+            </div>
+            <h3 className="chat-drop-title">Lepaskan Gambar di Sini</h3>
+            <p className="chat-drop-sub">
+              Seret 1 atau beberapa gambar sekaligus untuk melampirkan ke chat
+            </p>
+          </div>
+        </div>
+      )}
+
       {lightboxImage && (
         <div
           className="image-lightbox-overlay"
@@ -453,6 +557,7 @@ D. Pilihan D`;
       )}
 
       <ChatInput
+        ref={chatInputRef}
         onSend={handleSend}
         onStop={stopGenerating}
         isGenerating={isBusy}

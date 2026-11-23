@@ -1,5 +1,13 @@
 import "./ChatInput.css";
-import { useEffect, useRef, useState } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
+
+const MAX_IMAGES = 6;
 
 function EnterKeyIcon() {
   return (
@@ -14,21 +22,21 @@ function EnterKeyIcon() {
       <path
         d="M11 4H18.5C19.8807 4 21 5.11929 21 6.5V17.5C21 18.8807 19.8807 20 18.5 20H5.5C4.11929 20 3 18.8807 3 17.5V12C3 10.6193 4.11929 9.5 5.5 9.5H9V6.5C9 5.11929 10.1193 4 11 4Z"
         stroke="#FFFFFF"
-        strokeWidth="2.1"
+        strokeWidth="2.4"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
         d="M15.5 8.5V14.5H9"
         stroke="#FFFFFF"
-        strokeWidth="2.1"
+        strokeWidth="2.4"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
         d="M11.5 12L8.5 14.5L11.5 17"
         stroke="#FFFFFF"
-        strokeWidth="2.1"
+        strokeWidth="2.4"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -46,38 +54,23 @@ function StopIcon() {
       xmlns="http://www.w3.org/2000/svg"
       style={{ display: "block" }}
     >
-      <rect x="6" y="6" width="12" height="12" rx="2.5" fill="#FFFFFF" />
+      <rect x="6" y="6" width="12" height="12" rx="3" fill="#FFFFFF" />
     </svg>
   );
 }
 
-function ChatInput({ onSend, onStop, isGenerating, onPreviewImage, aiMode }) {
-  const [text, setText] = useState("");
-  const [imagePreview, setImagePreview] = useState(null);
-  const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
-
-  const textareaRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const attachMenuRef = useRef(null);
-
-  useEffect(() => {
-    function handleClickOutside(e) {
-      if (attachMenuRef.current && !attachMenuRef.current.contains(e.target)) {
-        setIsAttachMenuOpen(false);
-      }
+function compressImageToDataUrl(file) {
+  return new Promise((resolve) => {
+    if (!file || !file.type.startsWith("image/")) {
+      resolve(null);
+      return;
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  function processImageFile(file) {
-    if (!file || !file.type.startsWith("image/")) return;
 
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
-        const maxDim = 1280;
+        const maxDim = 1080;
         let { width, height } = img;
 
         if (width > maxDim || height > maxDim) {
@@ -96,13 +89,64 @@ function ChatInput({ onSend, onStop, isGenerating, onPreviewImage, aiMode }) {
         const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, width, height);
 
-        const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.85);
-        setImagePreview(compressedDataUrl);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
       };
+      img.onerror = () => resolve(null);
       img.src = event.target.result;
     };
+    reader.onerror = () => resolve(null);
     reader.readAsDataURL(file);
+  });
+}
+
+const ChatInput = forwardRef(function ChatInput(
+  { onSend, onStop, isGenerating, onPreviewImage },
+  ref
+) {
+  const [text, setText] = useState("");
+  const [images, setImages] = useState([]);
+  const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
+
+  const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const attachMenuRef = useRef(null);
+
+  async function processMultipleFiles(fileList) {
+    if (!fileList || fileList.length === 0) return;
+
+    const imageFiles = Array.from(fileList).filter((f) =>
+      f.type.startsWith("image/")
+    );
+    if (imageFiles.length === 0) return;
+
+    const compressedList = await Promise.all(
+      imageFiles.map((file) => compressImageToDataUrl(file))
+    );
+    const validUrls = compressedList.filter(Boolean);
+
+    if (validUrls.length > 0) {
+      setImages((prev) => [...prev, ...validUrls].slice(0, MAX_IMAGES));
+      textareaRef.current?.focus();
+    }
   }
+
+  useImperativeHandle(ref, () => ({
+    addFiles: (fileList) => {
+      if (!isGenerating) {
+        processMultipleFiles(fileList);
+      }
+    },
+  }));
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (attachMenuRef.current && !attachMenuRef.current.contains(e.target)) {
+        setIsAttachMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     function handleGlobalPaste(e) {
@@ -110,16 +154,17 @@ function ChatInput({ onSend, onStop, isGenerating, onPreviewImage, aiMode }) {
       const items = e.clipboardData?.items;
       if (!items) return;
 
+      const pastedFiles = [];
       for (const item of items) {
         if (item.type.startsWith("image/")) {
-          e.preventDefault();
           const file = item.getAsFile();
-          if (file) {
-            processImageFile(file);
-            textareaRef.current?.focus();
-          }
-          break;
+          if (file) pastedFiles.push(file);
         }
+      }
+
+      if (pastedFiles.length > 0) {
+        e.preventDefault();
+        processMultipleFiles(pastedFiles);
       }
     }
 
@@ -128,21 +173,24 @@ function ChatInput({ onSend, onStop, isGenerating, onPreviewImage, aiMode }) {
   }, [isGenerating]);
 
   function handleFileChange(e) {
-    const file = e.target.files?.[0];
-    if (file) {
-      processImageFile(file);
+    if (e.target.files?.length) {
+      processMultipleFiles(e.target.files);
     }
     e.target.value = "";
+  }
+
+  function handleRemoveImage(indexToRemove) {
+    setImages((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   }
 
   function handleSubmit(e) {
     e?.preventDefault();
     if (isGenerating) return;
-    if (!text.trim() && !imagePreview) return;
+    if (!text.trim() && images.length === 0) return;
 
-    onSend(text.trim(), imagePreview);
+    onSend(text.trim(), images);
     setText("");
-    setImagePreview(null);
+    setImages([]);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
@@ -163,47 +211,48 @@ function ChatInput({ onSend, onStop, isGenerating, onPreviewImage, aiMode }) {
     e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
   }
 
-  const canSend =
-    !isGenerating && (text.trim().length > 0 || Boolean(imagePreview));
+  const canSend = !isGenerating && (text.trim().length > 0 || images.length > 0);
 
   return (
     <div className="chat-input-container">
       <form className="chat-input-box" onSubmit={handleSubmit}>
-        {imagePreview && (
+        {images.length > 0 && (
           <div className="input-image-preview-row">
-            <div className="input-image-thumb-wrapper">
-              <img
-                src={imagePreview}
-                alt="Preview lampiran"
-                className="input-image-thumb"
-                onClick={() => onPreviewImage?.(imagePreview)}
-                title="Klik untuk memperbesar dan mengecek gambar"
-              />
-              <button
-                type="button"
-                className="input-image-remove-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setImagePreview(null);
-                }}
-                title="Hapus gambar"
-                aria-label="Hapus gambar"
-              >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+            {images.map((imgUrl, idx) => (
+              <div key={idx} className="input-image-thumb-wrapper">
+                <img
+                  src={imgUrl}
+                  alt={`Preview lampiran ${idx + 1}`}
+                  className="input-image-thumb"
+                  onClick={() => onPreviewImage?.(imgUrl)}
+                  title="Klik untuk memperbesar gambar"
+                />
+                <button
+                  type="button"
+                  className="input-image-remove-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemoveImage(idx);
+                  }}
+                  title="Hapus gambar ini"
+                  aria-label="Hapus gambar"
                 >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
@@ -213,8 +262,12 @@ function ChatInput({ onSend, onStop, isGenerating, onPreviewImage, aiMode }) {
               type="button"
               className="attach-plus-btn"
               onClick={() => setIsAttachMenuOpen(!isAttachMenuOpen)}
-              disabled={isGenerating}
-              title="Lampirkan foto"
+              disabled={isGenerating || images.length >= MAX_IMAGES}
+              title={
+                images.length >= MAX_IMAGES
+                  ? `Maksimal ${MAX_IMAGES} gambar`
+                  : "Lampirkan foto (bisa pilih banyak atau seret langsung)"
+              }
               aria-label="Lampirkan foto"
             >
               <svg
@@ -223,7 +276,7 @@ function ChatInput({ onSend, onStop, isGenerating, onPreviewImage, aiMode }) {
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="2.2"
+                strokeWidth="2.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
@@ -243,12 +296,12 @@ function ChatInput({ onSend, onStop, isGenerating, onPreviewImage, aiMode }) {
                   }}
                 >
                   <svg
-                    width="17"
-                    height="17"
+                    width="18"
+                    height="18"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="2"
+                    strokeWidth="2.4"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   >
@@ -257,7 +310,7 @@ function ChatInput({ onSend, onStop, isGenerating, onPreviewImage, aiMode }) {
                   <div className="attach-item-text">
                     <span className="attach-item-title">Add photos</span>
                     <span className="attach-item-sub">
-                      Upload from computer or gallery
+                      Select multiple images (max {MAX_IMAGES}) or drag & drop
                     </span>
                   </div>
                 </button>
@@ -268,6 +321,7 @@ function ChatInput({ onSend, onStop, isGenerating, onPreviewImage, aiMode }) {
               ref={fileInputRef}
               type="file"
               accept="image/*"
+              multiple
               className="hidden-file-input"
               onChange={handleFileChange}
             />
@@ -277,11 +331,7 @@ function ChatInput({ onSend, onStop, isGenerating, onPreviewImage, aiMode }) {
             ref={textareaRef}
             className="chat-textarea"
             rows={1}
-            placeholder={
-              aiMode === "general"
-                ? "Ask StudyMate"
-                : "Ask StudyMate"
-            }
+            placeholder="Ask StudyMate"
             value={text}
             onChange={handleTextareaChange}
             onKeyDown={handleKeyDown}
@@ -302,6 +352,6 @@ function ChatInput({ onSend, onStop, isGenerating, onPreviewImage, aiMode }) {
       </form>
     </div>
   );
-}
+});
 
 export default ChatInput;

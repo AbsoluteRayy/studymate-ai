@@ -29,16 +29,32 @@ function MessageBubble({
   onPreviewImage,
 }) {
   if (msg.sender === "user") {
+    const msgImages =
+      Array.isArray(msg.images) && msg.images.length > 0
+        ? msg.images
+        : msg.image
+        ? [msg.image]
+        : [];
+
     return (
       <div className="message-row user">
         {isEditingThis ? (
           <div className="user-edit-box">
-            {msg.image && (
-              <img
-                src={msg.image}
-                alt="Lampiran"
-                className="user-message-image"
-              />
+            {msgImages.length > 0 && (
+              <div
+                className={`user-message-images-grid ${
+                  msgImages.length > 1 ? "multi" : "single"
+                }`}
+              >
+                {msgImages.map((imgUrl, idx) => (
+                  <img
+                    key={idx}
+                    src={imgUrl}
+                    alt={`Lampiran ${idx + 1}`}
+                    className="user-message-image"
+                  />
+                ))}
+              </div>
             )}
             <textarea
               className="user-edit-textarea"
@@ -68,15 +84,24 @@ function MessageBubble({
         ) : (
           <div className="user-message-container">
             <div className="user-message">
-              {msg.image && (
-                <img
-                  src={msg.image}
-                  alt="Gambar unggahan"
-                  className="user-message-image"
+              {msgImages.length > 0 && (
+                <div
+                  className={`user-message-images-grid ${
+                    msgImages.length > 1 ? "multi" : "single"
+                  }`}
                   style={{ marginBottom: msg.text ? "8px" : "0" }}
-                  onClick={() => onPreviewImage(msg.image)}
-                  title="Klik untuk memperbesar gambar"
-                />
+                >
+                  {msgImages.map((imgUrl, idx) => (
+                    <img
+                      key={idx}
+                      src={imgUrl}
+                      alt={`Gambar unggahan ${idx + 1}`}
+                      className="user-message-image"
+                      onClick={() => onPreviewImage(imgUrl)}
+                      title="Klik untuk memperbesar gambar"
+                    />
+                  ))}
+                </div>
               )}
               {msg.text && <div>{msg.text}</div>}
             </div>

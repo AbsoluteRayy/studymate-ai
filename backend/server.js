@@ -15,7 +15,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 app.use(cors());
-app.use(express.json({ limit: "15mb" }));
+app.use(express.json({ limit: "25mb" }));
 
 // ============================
 // Inisialisasi Database PostgreSQL (Neon.tech)
@@ -211,12 +211,13 @@ Jawablah menggunakan Markdown yang rapi, jelas, terstruktur, dan langsung ke int
 `;
 
 // ============================
-// Chat Endpoint (Hybrid: Gemini Vision + Multi-Key Groq Qwen 3.8 | Dual Mode)
+// Chat Endpoint (Hybrid: Gemini Multi-Vision + Multi-Key Groq Qwen 3.8 | Dual Mode)
 // ============================
 app.post("/chat", async (req, res) => {
   const {
     prompt,
     image,
+    images = [],
     history = [],
     sessionId,
     shouldUpdateTitle,
@@ -229,14 +230,26 @@ app.post("/chat", async (req, res) => {
   const activeSystemPrompt =
     activeMode === "general" ? GENERAL_SYSTEM_PROMPT : DATABASE_SYSTEM_PROMPT;
 
+  const rawImages =
+    Array.isArray(images) && images.length > 0
+      ? images
+      : image
+      ? [image]
+      : [];
+  const hasImages = rawImages.length > 0;
+
   const userTypedPrompt = (prompt && prompt.trim()) || "";
   const defaultImagePrompt =
-    activeMode === "general"
+    rawImages.length > 1
+      ? activeMode === "general"
+        ? `Analisis dan jelaskan ke-${rawImages.length} gambar yang dikirimkan pengguna ini secara lengkap, jelas, dan terstruktur.`
+        : `Analisis dan jelaskan ke-${rawImages.length} gambar Basis Data yang dikirimkan pengguna ini secara lengkap dan terstruktur.`
+      : activeMode === "general"
       ? "Analisis dan jelaskan gambar yang dikirimkan pengguna ini secara lengkap, jelas, dan terstruktur."
       : "Analisis dan jelaskan gambar Basis Data yang dikirimkan pengguna ini secara lengkap dan terstruktur.";
 
   const aiInstructionPrompt =
-    userTypedPrompt || (image ? defaultImagePrompt : "");
+    userTypedPrompt || (hasImages ? defaultImagePrompt : "");
 
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -249,7 +262,7 @@ app.post("/chat", async (req, res) => {
   });
 
   try {
-    if (image && !process.env.GEMINI_API_KEY) {
+    if (hasImages && !process.env.GEMINI_API_KEY) {
       throw new Error(
         "GEMINI_API_KEY belum diatur di Environment Variables Vercel / .env."
       );
@@ -267,15 +280,21 @@ app.post("/chat", async (req, res) => {
 
     let fullReply = "";
 
-    if (image) {
-      const matches = image.match(
-        /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/
-      );
-      if (!matches) {
-        throw new Error("Format gambar tidak valid.");
-      }
-      const mimeType = matches[1];
-      const base64Data = matches[2];
+    if (hasImages) {
+      const inlineImageParts = rawImages.map((imgStr, idx) => {
+        const matches = String(imgStr).match(
+          /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/
+        );
+        if (!matches) {
+          throw new Error(`Format gambar ke-${idx + 1} tidak valid.`);
+        }
+        return {
+          inline_data: {
+            mime_type: matches[1],
+            data: matches[2],
+          },
+        };
+      });
 
       const historyContext = formattedHistory
         .map((m) => `${m.role === "user" ? "Pengguna" : "AI"}: ${m.content}`)
@@ -299,7 +318,7 @@ app.post("/chat", async (req, res) => {
       for (const modelName of geminiModels) {
         try {
           console.log(
-            `Mengirim gambar ke Gemini Native (${modelName}) [mode: ${activeMode}]...`
+            `Mengirim ${rawImages.length} gambar ke Gemini Native (${modelName}) [mode: ${activeMode}]...`
           );
           const geminiRes = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${process.env.GEMINI_API_KEY}`,
@@ -309,15 +328,7 @@ app.post("/chat", async (req, res) => {
               body: JSON.stringify({
                 contents: [
                   {
-                    parts: [
-                      { text: combinedPrompt },
-                      {
-                        inline_data: {
-                          mime_type: mimeType,
-                          data: base64Data,
-                        },
-                      },
-                    ],
+                    parts: [{ text: combinedPrompt }, ...inlineImageParts],
                   },
                 ],
                 generationConfig: {
@@ -454,15 +465,25 @@ app.post("/chat", async (req, res) => {
         }
       }
 
-      const savedQuestion = image
+      const imageTag =
+        rawImages.length > 1
+          ? `[Lampiran ${rawImages.length} Gambar]`
+          : "[Lampiran Gambar]";
+
+      const savedQuestion = hasImages
         ? userTypedPrompt
-          ? `[Lampiran Gambar] ${userTypedPrompt}`
-          : "[Lampiran Gambar]"
+          ? `${imageTag} ${userTypedPrompt}`
+          : imageTag
         : userTypedPrompt;
 
       await database.query(
         "INSERT INTO chat_history (session_id, mode, question, answer) VALUES ($1, $2, $3, $4)",
-        [sessionId ? String(sessionId) : null, activeMode, savedQuestion, fullReply]
+        [
+          sessionId ? String(sessionId) : null,
+          activeMode,
+          savedQuestion,
+          fullReply,
+        ]
       );
 
       if (sessionId && generatedTitle) {
@@ -473,7 +494,9 @@ app.post("/chat", async (req, res) => {
           [String(sessionId), generatedTitle, activeMode]
         );
       }
-      console.log(`💾 Riwayat chat [${activeMode}] berhasil disimpan ke PostgreSQL.`);
+      console.log(
+        `💾 Riwayat chat [${activeMode}] berhasil disimpan ke PostgreSQL.`
+      );
     }
 
     res.write(
