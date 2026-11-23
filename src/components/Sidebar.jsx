@@ -1,6 +1,7 @@
 import "./Sidebar.css";
 import { useEffect, useRef, useState } from "react";
 import SettingsMenu from "./SettingsMenu";
+import BrandLogo from "./BrandLogo";
 
 function Sidebar({
   isOpen,
@@ -54,12 +55,37 @@ function Sidebar({
         isMobile ? "mobile-drawer" : ""
       } ${isGeneral ? "sidebar-general" : "sidebar-database"}`}
     >
-      {/* Header Sidebar: Tombol Toggle + Logo StudyMate AI */}
+      {/* Header Sidebar: Logo Bintang + StudyMate AI di Kiri, Tombol Sidebar di Kanan */}
       <div className="logo">
+        <div className="logo-left-group">
+          <button
+            type="button"
+            className="sidebar-brand-btn"
+            onClick={onNewChat}
+            title="StudyMate AI — New Chat"
+          >
+            <BrandLogo size={23} />
+          </button>
+
+          <div className="logo-brand-stack">
+            <h2 className="logo-main-text">StudyMate AI</h2>
+            <div className="logo-general-mask">
+              <span
+                className={`logo-general-subtext anim-allow ${
+                  isGeneral ? "visible" : "hidden"
+                }`}
+              >
+                General
+              </span>
+            </div>
+          </div>
+        </div>
+
         <button
           className="sidebar-toggle-btn"
           onClick={onToggle}
           title="Sembunyikan Sidebar"
+          aria-label="Sembunyikan Sidebar"
         >
           <svg
             width="20"
@@ -75,19 +101,6 @@ function Sidebar({
             <line x1="9" y1="3" x2="9" y2="21" />
           </svg>
         </button>
-
-        <div className="logo-brand-stack">
-          <h2 className="logo-main-text">StudyMate AI</h2>
-          <div className="logo-general-mask">
-            <span
-              className={`logo-general-subtext anim-allow ${
-                isGeneral ? "visible" : "hidden"
-              }`}
-            >
-              General
-            </span>
-          </div>
-        </div>
       </div>
 
       {/* Tombol New Chat */}
