@@ -37,7 +37,6 @@
 }
 
 .header-sidebar-btn {
-  position: relative;
   width: 38px;
   height: 38px;
   background: #ffffff;
@@ -52,6 +51,11 @@
   justify-content: center;
   flex-shrink: 0;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.header-sidebar-btn svg {
+  display: block;
+  opacity: 1;
 }
 
 .header-sidebar-btn:hover {
@@ -78,37 +82,6 @@
 
 .app.mode-general .chat-window.dark .header-sidebar-btn:hover {
   background: #44342e;
-}
-
-/* Transisi Logo Bintang -> Ikon Buka Sidebar saat Hover */
-.header-logo-default,
-.header-logo-hover-icon {
-  position: absolute;
-  inset: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: opacity 0.2s ease, transform 0.22s ease !important;
-}
-
-.header-logo-default {
-  opacity: 1;
-  transform: scale(1) rotate(0deg);
-}
-
-.header-logo-hover-icon {
-  opacity: 0;
-  transform: scale(0.8);
-}
-
-.header-sidebar-btn.has-brand-logo:hover .header-logo-default {
-  opacity: 0;
-  transform: scale(0.8) rotate(25deg);
-}
-
-.header-sidebar-btn.has-brand-logo:hover .header-logo-hover-icon {
-  opacity: 1;
-  transform: scale(1);
 }
 
 .header-title-wrapper {
