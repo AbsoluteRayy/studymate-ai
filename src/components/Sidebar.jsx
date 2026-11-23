@@ -55,7 +55,7 @@ function Sidebar({
         isMobile ? "mobile-drawer" : ""
       } ${isGeneral ? "sidebar-general" : "sidebar-database"}`}
     >
-      {/* Header Sidebar: Logo Bintang Polos + StudyMate AI sejajar di Kiri, Tombol Sidebar di Kanan */}
+      {/* Header Sidebar: Tinggi Terkunci Stabil, Logo Bintang Polos + StudyMate AI Rapat dengan General */}
       <div className="logo">
         <div className="logo-left-group">
           <button
@@ -67,13 +67,13 @@ function Sidebar({
             <BrandLogo size={26} />
           </button>
 
-          <div className="logo-brand-stack">
-            <h2 className="logo-main-text">StudyMate AI</h2>
-            <div
-              className={`logo-general-mask anim-allow ${
-                isGeneral ? "is-open" : ""
-              }`}
-            >
+          <div
+            className={`logo-brand-stack anim-allow ${
+              isGeneral ? "has-sublabel" : ""
+            }`}
+          >
+            <h2 className="logo-main-text anim-allow">StudyMate AI</h2>
+            <div className="logo-general-mask">
               <span
                 className={`logo-general-subtext anim-allow ${
                   isGeneral ? "visible" : "hidden"
@@ -108,7 +108,7 @@ function Sidebar({
             </svg>
           </span>
 
-          {/* Ikon Hover ala Gemini (Panah ke Kiri di dalam Panel) */}
+          {/* Ikon Hover ala Gemini (Panah ke Kiri) */}
           <span className="sidebar-icon-hover anim-allow">
             <svg
               width="20"
@@ -128,7 +128,7 @@ function Sidebar({
         </button>
       </div>
 
-      {/* Tombol New Chat */}
+      {/* Tombol New Chat (Ikon Compose ala ChatGPT / Gemini) */}
       <button className="new-chat" onClick={onNewChat}>
         <svg
           width="19"
@@ -136,12 +136,12 @@ function Sidebar({
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
-          strokeWidth="2.5"
+          strokeWidth="2.4"
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
+          <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path d="M18.375 2.625a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.375-9.375z" />
         </svg>
         <span>New Chat</span>
       </button>
