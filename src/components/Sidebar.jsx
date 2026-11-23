@@ -55,7 +55,7 @@ function Sidebar({
         isMobile ? "mobile-drawer" : ""
       } ${isGeneral ? "sidebar-general" : "sidebar-database"}`}
     >
-      {/* Header Sidebar: Logo Bintang + StudyMate AI di Kiri, Tombol Sidebar di Kanan */}
+      {/* Header Sidebar: Logo Bintang Polos + StudyMate AI sejajar di Kiri, Tombol Sidebar di Kanan */}
       <div className="logo">
         <div className="logo-left-group">
           <button
@@ -64,12 +64,16 @@ function Sidebar({
             onClick={onNewChat}
             title="StudyMate AI — New Chat"
           >
-            <BrandLogo size={23} />
+            <BrandLogo size={26} />
           </button>
 
           <div className="logo-brand-stack">
             <h2 className="logo-main-text">StudyMate AI</h2>
-            <div className="logo-general-mask">
+            <div
+              className={`logo-general-mask anim-allow ${
+                isGeneral ? "is-open" : ""
+              }`}
+            >
               <span
                 className={`logo-general-subtext anim-allow ${
                   isGeneral ? "visible" : "hidden"
@@ -82,24 +86,45 @@ function Sidebar({
         </div>
 
         <button
-          className="sidebar-toggle-btn"
+          className="sidebar-toggle-btn anim-allow"
           onClick={onToggle}
-          title="Sembunyikan Sidebar"
-          aria-label="Sembunyikan Sidebar"
+          title="Tutup sidebar"
+          aria-label="Tutup sidebar"
         >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <rect x="3" y="3" width="18" height="18" rx="3" />
-            <line x1="9" y1="3" x2="9" y2="21" />
-          </svg>
+          {/* Ikon Default */}
+          <span className="sidebar-icon-default anim-allow">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="4" />
+              <line x1="9" y1="3" x2="9" y2="21" />
+            </svg>
+          </span>
+
+          {/* Ikon Hover ala Gemini (Panah ke Kiri di dalam Panel) */}
+          <span className="sidebar-icon-hover anim-allow">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="4" />
+              <line x1="9" y1="3" x2="9" y2="21" />
+              <polyline points="16 9 13 12 16 15" />
+            </svg>
+          </span>
         </button>
       </div>
 

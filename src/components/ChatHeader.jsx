@@ -73,12 +73,33 @@ function ChatHeader({
         {!isSidebarOpen && (
           <button
             type="button"
-            className="header-sidebar-btn has-brand-logo"
+            className="header-sidebar-btn has-brand-logo anim-allow"
             onClick={onToggleSidebar}
-            title="Tampilkan Sidebar"
-            aria-label="Tampilkan Sidebar"
+            title="Buka sidebar"
+            aria-label="Buka sidebar"
           >
-            <BrandLogo size={23} />
+            {/* Logo Bintang Polos Tanpa Bulatan */}
+            <span className="header-logo-default anim-allow">
+              <BrandLogo size={26} />
+            </span>
+
+            {/* Ikon Hover ala Gemini (Panah ke Kanan untuk Buka Sidebar) */}
+            <span className="header-logo-hover-icon anim-allow">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="4" />
+                <line x1="9" y1="3" x2="9" y2="21" />
+                <polyline points="13 9 16 12 13 15" />
+              </svg>
+            </span>
           </button>
         )}
 
