@@ -33,7 +33,7 @@ async function getDB() {
 }
 
 // ============================
-// Kumpulan Multi-API Key Groq (Untuk Teks)
+// Kumpulan Multi-API Key Groq (Untuk Teks: Qwen 3.8 27B)
 // ============================
 function getGroqApiKeys() {
   const keysFromList = (process.env.GROQ_API_KEYS || "")
@@ -211,7 +211,7 @@ Jawablah menggunakan Markdown yang rapi, jelas, terstruktur, dan langsung ke int
 `;
 
 // ============================
-// Chat Endpoint (Hybrid: Gemini Multi-Vision Stream + Multi-Key Groq | Dual Mode)
+// Chat Endpoint (Hybrid: Gemini Multi-Vision Stream + Multi-Key Groq Qwen 3.8 | Dual Mode)
 // ============================
 app.post("/chat", async (req, res) => {
   const {
@@ -305,8 +305,9 @@ app.post("/chat", async (req, res) => {
         ? `${activeSystemPrompt}\n\nRiwayat percakapan sebelumnya:\n${historyContext}\n\nInstruksi / Pertanyaan Pengguna saat ini:\n${aiInstructionPrompt}`
         : `${activeSystemPrompt}\n\nInstruksi / Pertanyaan Pengguna:\n${aiInstructionPrompt}`;
 
-      // Langsung gunakan model aktif tercepat tanpa membuang waktu mencoba model 3.5 yang 404
       const geminiModels = [
+        "gemini-3.5-flash-lite",
+        "gemini-3.5-flash",
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
         "gemini-2.0-flash",
@@ -318,7 +319,7 @@ app.post("/chat", async (req, res) => {
       for (const modelName of geminiModels) {
         try {
           console.log(
-            `Streaming ${rawImages.length} gambar ke Gemini (${modelName}) [mode: ${activeMode}]...`
+            `Streaming ${rawImages.length} gambar ke Gemini Native (${modelName}) [mode: ${activeMode}]...`
           );
           const geminiRes = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
@@ -409,11 +410,11 @@ app.post("/chat", async (req, res) => {
       for (const { label, client } of groqClients) {
         try {
           console.log(
-            `Prompt (llama-3.3-70b-versatile via ${label}) [mode: ${activeMode}]:`,
+            `Prompt (qwen/qwen3.8-27b via ${label}) [mode: ${activeMode}]:`,
             aiInstructionPrompt
           );
           const stream = await client.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
+            model: "qwen/qwen3.8-27b",
             messages: [
               { role: "system", content: activeSystemPrompt },
               ...formattedHistory,
