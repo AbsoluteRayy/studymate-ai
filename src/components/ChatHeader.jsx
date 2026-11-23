@@ -75,15 +75,13 @@ function ChatHeader({
             type="button"
             className="header-sidebar-btn has-brand-logo anim-allow"
             onClick={onToggleSidebar}
-            title="Buka sidebar"
-            aria-label="Buka sidebar"
+            title="Open sidebar"
+            aria-label="Open sidebar"
           >
-            {/* Logo Bintang Polos Tanpa Bulatan */}
             <span className="header-logo-default anim-allow">
               <BrandLogo size={26} />
             </span>
 
-            {/* Ikon Hover ala Gemini (Panah ke Kanan untuk Buka Sidebar) */}
             <span className="header-logo-hover-icon anim-allow">
               <svg
                 width="20"
@@ -119,7 +117,7 @@ function ChatHeader({
               type="button"
               className="chat-header-title"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              title="Klik untuk opsi obrolan"
+              title="Chat options"
             >
               <span className="header-title-label">{currentTitle}</span>
               <svg
@@ -192,8 +190,8 @@ function ChatHeader({
         <button
           className="theme-toggle-btn"
           onClick={onToggleDarkMode}
-          title="Ganti tampilan Terang / Gelap"
-          aria-label="Ganti tampilan Terang / Gelap"
+          title={darkMode ? "Switch to Light theme" : "Switch to Dark theme"}
+          aria-label={darkMode ? "Switch to Light theme" : "Switch to Dark theme"}
         >
           {darkMode ? (
             <>
@@ -217,7 +215,7 @@ function ChatHeader({
                 <line x1="4.93" y1="19.07" x2="6.34" y2="17.66" />
                 <line x1="17.66" y1="6.34" x2="19.07" y2="4.93" />
               </svg>
-              <span className="theme-toggle-label">Terang</span>
+              <span className="theme-toggle-label">Light</span>
             </>
           ) : (
             <>
@@ -233,7 +231,7 @@ function ChatHeader({
               >
                 <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
               </svg>
-              <span className="theme-toggle-label">Gelap</span>
+              <span className="theme-toggle-label">Dark</span>
             </>
           )}
         </button>
