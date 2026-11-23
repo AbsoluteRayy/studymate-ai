@@ -604,7 +604,7 @@ app.delete("/chats/:id", async (req, res) => {
 });
 
 // ============================
-// Endpoint Cek Isi Database PostgreSQL
+// Endpoint Cek Isi Database PostgreSQL (Terisolasi Per Perangkat)
 // ============================
 app.get("/history", async (req, res) => {
   try {
@@ -612,12 +612,38 @@ app.get("/history", async (req, res) => {
     if (!database) {
       return res.status(500).json({ error: "Database belum siap." });
     }
+
+    const rawIds = String(req.query.sessionIds || "").trim();
+    if (!rawIds) {
+      return res.json({
+        total: 0,
+        sessions: [],
+        data: [],
+      });
+    }
+
+    const sessionIds = rawIds
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
+
+    if (sessionIds.length === 0) {
+      return res.json({
+        total: 0,
+        sessions: [],
+        data: [],
+      });
+    }
+
     const historyResult = await database.query(
-      "SELECT * FROM chat_history ORDER BY created_at DESC"
+      "SELECT * FROM chat_history WHERE session_id = ANY($1::text[]) ORDER BY created_at DESC",
+      [sessionIds]
     );
     const sessionsResult = await database.query(
-      "SELECT * FROM chat_sessions ORDER BY updated_at DESC"
+      "SELECT * FROM chat_sessions WHERE id = ANY($1::text[]) ORDER BY updated_at DESC",
+      [sessionIds]
     );
+
     res.json({
       total: historyResult.rows.length,
       sessions: sessionsResult.rows,

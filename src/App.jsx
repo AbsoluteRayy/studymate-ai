@@ -4,7 +4,8 @@ import ChatWindow from "./components/ChatWindow";
 import "./App.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
-const STORAGE_CHATS_KEY = "studymate_chats_v2";
+const STORAGE_CHATS_KEY = "studymate_chats_v3";
+const STORAGE_OWNED_SESSIONS_KEY = "studymate_owned_sessions_v1";
 const STORAGE_MODE_KEY = "studymate_ai_mode";
 
 function loadSavedMode() {
@@ -16,12 +17,55 @@ function loadSavedMode() {
   }
 }
 
+function loadOwnedSessionIds() {
+  try {
+    const raw = localStorage.getItem(STORAGE_OWNED_SESSIONS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+function registerOwnedSessionId(sessionId) {
+  const idStr = String(sessionId);
+  try {
+    const current = loadOwnedSessionIds();
+    if (!current.includes(idStr)) {
+      localStorage.setItem(
+        STORAGE_OWNED_SESSIONS_KEY,
+        JSON.stringify([idStr, ...current])
+      );
+    }
+  } catch {
+    // Abaikan jika storage diblokir
+  }
+}
+
+function unregisterOwnedSessionId(sessionId) {
+  const idStr = String(sessionId);
+  try {
+    const current = loadOwnedSessionIds();
+    const filtered = current.filter((id) => id !== idStr);
+    localStorage.setItem(STORAGE_OWNED_SESSIONS_KEY, JSON.stringify(filtered));
+  } catch {
+    // Abaikan jika storage diblokir
+  }
+}
+
 function loadSavedChats() {
   try {
+    // Hapus cache lama v2 yang sempat tercampur riwayat global
+    localStorage.removeItem("studymate_chats_v2");
+
     const raw = localStorage.getItem(STORAGE_CHATS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+
+    const ownedSet = new Set(loadOwnedSessionIds());
+    return parsed.filter((chat) => ownedSet.has(String(chat.id)));
   } catch {
     return [];
   }
@@ -31,7 +75,6 @@ function persistChatsSafely(chatsList) {
   try {
     localStorage.setItem(STORAGE_CHATS_KEY, JSON.stringify(chatsList));
   } catch {
-    // Jika kuota localStorage penuh karena gambar base64, simpan tanpa lampiran gambar lama
     try {
       const lightweight = chatsList.map((chat, cIdx) => ({
         ...chat,
@@ -41,7 +84,7 @@ function persistChatsSafely(chatsList) {
       }));
       localStorage.setItem(STORAGE_CHATS_KEY, JSON.stringify(lightweight));
     } catch {
-      // Abaikan jika storage diblokir browser
+      // Abaikan jika storage penuh/diblokir
     }
   }
 }
@@ -59,7 +102,7 @@ function App() {
     () => window.innerWidth > 768
   );
 
-  // Simpan mode terakhir (database / general) agar diingat saat web ditutup & dibuka lagi
+  // Simpan mode terakhir (database / general)
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_MODE_KEY, aiMode);
@@ -68,42 +111,46 @@ function App() {
     }
   }, [aiMode]);
 
-  // Simpan daftar obrolan ke localStorage
+  // Simpan daftar obrolan perangkat ini ke localStorage
   useEffect(() => {
     persistChatsSafely(chats);
   }, [chats]);
 
-  // Deteksi ukuran layar mobile / zoom
   useEffect(() => {
     function handleResize() {
-      const mobile = window.innerWidth <= 768;
-      setIsMobile(mobile);
+      setIsMobile(window.innerWidth <= 768);
     }
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Sinkronkan riwayat dari PostgreSQL saat web dibuka (memulihkan chat yang ditinggal saat browser ditutup)
+  // Sinkronkan HANYA sesi milik perangkat ini dari PostgreSQL (memulihkan jawaban yang ditinggal saat tab ditutup)
   useEffect(() => {
     let isMounted = true;
 
-    async function syncHistoryFromServer() {
+    async function syncDeviceHistoryFromServer() {
+      const ownedIds = loadOwnedSessionIds();
+      if (ownedIds.length === 0) return;
+
       try {
-        const res = await fetch(`${API_BASE_URL}/history`);
+        const query = encodeURIComponent(ownedIds.join(","));
+        const res = await fetch(`${API_BASE_URL}/history?sessionIds=${query}`);
         if (!res.ok) return;
+
         const payload = await res.json();
         const sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
         const rows = Array.isArray(payload.data) ? payload.data : [];
 
         if (rows.length === 0 && sessions.length === 0) return;
 
-        // Urutkan kronologis (lama -> baru)
+        const ownedSet = new Set(ownedIds);
         const chronologicalRows = [...rows].reverse();
         const messagesBySession = {};
 
         for (const row of chronologicalRows) {
           const sid = row.session_id ? String(row.session_id) : null;
-          if (!sid) continue;
+          if (!sid || !ownedSet.has(sid)) continue;
+
           if (!messagesBySession[sid]) {
             messagesBySession[sid] = [];
           }
@@ -123,7 +170,10 @@ function App() {
 
         const sessionMetaMap = {};
         for (const s of sessions) {
-          sessionMetaMap[String(s.id)] = s;
+          const sid = String(s.id);
+          if (ownedSet.has(sid)) {
+            sessionMetaMap[sid] = s;
+          }
         }
 
         if (!isMounted) return;
@@ -132,15 +182,13 @@ function App() {
           const mergedMap = new Map();
 
           for (const localChat of prevChats) {
-            mergedMap.set(String(localChat.id), localChat);
+            const sid = String(localChat.id);
+            if (ownedSet.has(sid)) {
+              mergedMap.set(sid, localChat);
+            }
           }
 
-          const allServerIds = new Set([
-            ...Object.keys(messagesBySession),
-            ...Object.keys(sessionMetaMap),
-          ]);
-
-          for (const sid of allServerIds) {
+          for (const sid of ownedIds) {
             const serverMsgs = messagesBySession[sid] || [];
             const meta = sessionMetaMap[sid];
             const existing = mergedMap.get(sid);
@@ -158,7 +206,6 @@ function App() {
                 });
               }
             } else if (serverMsgs.length > existing.messages.length) {
-              // Pertahankan gambar lokal (jika ada) pada pesan user yang sudah ada
               const mergedMessages = serverMsgs.map((srvMsg, idx) => {
                 const localMatch = existing.messages[idx];
                 if (
@@ -190,20 +237,21 @@ function App() {
           );
         });
       } catch {
-        // Offline / server lokal belum aktif, gunakan cache localStorage
+        // Offline / gunakan cache lokal perangkat
       }
     }
 
-    syncHistoryFromServer();
+    syncDeviceHistoryFromServer();
     return () => {
       isMounted = false;
     };
   }, []);
 
-  // Update pesan pada chat tertentu (targetChatId) secara independen meski user sudah pindah ke chat lain
   const handleUpdateChatMessages = useCallback(
     (targetChatId, updater, meta = {}) => {
       const idStr = String(targetChatId);
+      registerOwnedSessionId(idStr);
+
       setChats((prevChats) => {
         const exists = prevChats.some((c) => String(c.id) === idStr);
         if (exists) {
@@ -264,8 +312,7 @@ function App() {
   );
 
   function handleNewChat() {
-    const freshId = String(Date.now());
-    setCurrentChatId(freshId);
+    setCurrentChatId(String(Date.now()));
     if (isMobile) {
       setIsSidebarOpen(false);
     }
@@ -280,6 +327,7 @@ function App() {
 
   async function handleDeleteChat(chatId) {
     const idStr = String(chatId);
+    unregisterOwnedSessionId(idStr);
     setChats((prev) => prev.filter((chat) => String(chat.id) !== idStr));
 
     if (String(currentChatId) === idStr) {
