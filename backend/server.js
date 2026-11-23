@@ -33,7 +33,7 @@ async function getDB() {
 }
 
 // ============================
-// Kumpulan Multi-API Key Groq (Untuk Teks: Qwen 3.8 27B)
+// Kumpulan Multi-API Key Groq & Daftar Auto-Fallback Model Qwen
 // ============================
 function getGroqApiKeys() {
   const keysFromList = (process.env.GROQ_API_KEYS || "")
@@ -52,6 +52,25 @@ function getGroqApiKeys() {
     .filter(Boolean);
 
   return [...new Set([...keysFromList, ...individualKeys])];
+}
+
+function getGroqQwenModels() {
+  const envModels = (process.env.GROQ_QWEN_MODELS || "")
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean);
+
+  if (envModels.length > 0) {
+    return [...new Set(envModels)];
+  }
+
+  // Urutan prioritas model Qwen di Groq (otomatis pindah jika limit / 429 / 413)
+  return [
+    "qwen/qwen3.8-27b",
+    "qwen/qwen3-32b",
+    "qwen-qwq-32b",
+    "qwen-2.5-32b",
+  ];
 }
 
 let groqRoundRobinIndex = 0;
@@ -76,6 +95,39 @@ function getOrderedGroqClients() {
       maxRetries: 0,
     }),
   }));
+}
+
+// ============================
+// Helper: Batasi Ukuran History Agar Tidak Melebihi 7000 ITPM Groq
+// ============================
+function trimHistoryByBudget(historyList, maxChars = 11500) {
+  if (!Array.isArray(historyList) || historyList.length === 0) return [];
+
+  const selected = [];
+  let usedChars = 0;
+
+  // Iterasi dari pesan terbaru ke terlama agar konteks quiz terakhir selalu terbawa
+  for (let i = historyList.length - 1; i >= 0; i--) {
+    const item = historyList[i];
+    if (!item || !item.text) continue;
+
+    const role = item.sender === "user" ? "user" : "assistant";
+    let content = String(item.text);
+
+    // Jika satu pesan tunggal terlalu panjang, pangkas secukupnya agar muat
+    if (content.length > 6500) {
+      content = content.slice(0, 6500) + "\n...[dipersingkat]";
+    }
+
+    if (usedChars + content.length > maxChars && selected.length >= 2) {
+      break;
+    }
+
+    selected.unshift({ role, content });
+    usedChars += content.length;
+  }
+
+  return selected;
 }
 
 // ============================
@@ -211,7 +263,7 @@ Jawablah menggunakan Markdown yang rapi, jelas, terstruktur, dan langsung ke int
 `;
 
 // ============================
-// Chat Endpoint (Hybrid: Gemini Multi-Vision Stream + Multi-Key Groq Qwen 3.8 | Dual Mode)
+// Chat Endpoint (Hybrid: Gemini Multi-Vision Stream + Auto-Fallback Multi-Qwen Groq | Dual Mode)
 // ============================
 app.post("/chat", async (req, res) => {
   const {
@@ -269,16 +321,7 @@ app.post("/chat", async (req, res) => {
       );
     }
 
-    const formattedHistory = Array.isArray(history)
-      ? history
-          .slice(-8)
-          .filter((m) => m && m.text)
-          .map((m) => ({
-            role: m.sender === "user" ? "user" : "assistant",
-            content: m.text,
-          }))
-      : [];
-
+    const formattedHistory = trimHistoryByBudget(history, 11500);
     let fullReply = "";
 
     if (hasImages) {
@@ -352,7 +395,6 @@ app.post("/chat", async (req, res) => {
           const decoder = new TextDecoder("utf-8");
           let buffer = "";
 
-          // Tetap lanjutkan generasi di latar belakang meskipun browser client ditutup
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
@@ -400,6 +442,8 @@ app.post("/chat", async (req, res) => {
       }
     } else {
       const groqClients = getOrderedGroqClients();
+      const qwenModels = getGroqQwenModels();
+
       if (groqClients.length === 0) {
         throw new Error(
           "GROQ_API_KEY atau GROQ_API_KEYS belum diatur di Environment Variables."
@@ -407,49 +451,116 @@ app.post("/chat", async (req, res) => {
       }
 
       let groqSuccess = false;
-      let lastGroqError = "Semua API key Groq sedang mencapai batas limit.";
+      let lastGroqError = "Semua API key dan model Qwen Groq sedang mencapai batas limit.";
 
-      for (const { label, client } of groqClients) {
-        try {
-          console.log(
-            `Prompt (qwen/qwen3.8-27b via ${label}) [mode: ${activeMode}]:`,
-            aiInstructionPrompt
-          );
-          const stream = await client.chat.completions.create({
-            model: "qwen/qwen3.8-27b",
-            messages: [
-              { role: "system", content: activeSystemPrompt },
-              ...formattedHistory,
-              { role: "user", content: aiInstructionPrompt },
-            ],
-            temperature: activeMode === "general" ? 0.65 : 0.5,
-            max_tokens: 4096,
-            stream: true,
-          });
+      // Auto-fallback: Coba model Qwen utama di semua key -> jika penuh/terlalu besar, otomatis pindah ke model Qwen Groq berikutnya
+      outerModelLoop: for (const modelName of qwenModels) {
+        for (const { label, client } of groqClients) {
+          try {
+            console.log(
+              `Prompt (${modelName} via ${label}) [mode: ${activeMode}]:`,
+              aiInstructionPrompt.slice(0, 120)
+            );
 
-          // Tetap lanjutkan generasi di server meskipun browser/tab ditutup
-          for await (const chunk of stream) {
-            const token = chunk.choices[0]?.delta?.content || "";
-            if (token) {
-              fullReply += token;
-              if (!responseClosed) {
-                res.write(`data: ${JSON.stringify({ token })}\n\n`);
+            const stream = await client.chat.completions.create({
+              model: modelName,
+              messages: [
+                { role: "system", content: activeSystemPrompt },
+                ...formattedHistory,
+                { role: "user", content: aiInstructionPrompt },
+              ],
+              temperature: activeMode === "general" ? 0.65 : 0.5,
+              max_tokens: 4096,
+              stream: true,
+            });
+
+            // Filter otomatis tag <think>...</think> jika model Qwen 3 / QwQ mengeluarkannya
+            let thinkBuffer = "";
+            let finishedThinking = false;
+
+            for await (const chunk of stream) {
+              const rawToken = chunk.choices[0]?.delta?.content || "";
+              if (!rawToken) continue;
+
+              if (!finishedThinking) {
+                thinkBuffer += rawToken;
+                const trimmedStart = thinkBuffer.trimStart();
+
+                if (trimmedStart.startsWith("<think>")) {
+                  const closeIdx = thinkBuffer.indexOf("</think>");
+                  if (closeIdx !== -1) {
+                    const afterThink = thinkBuffer
+                      .slice(closeIdx + 8)
+                      .replace(/^\s+/, "");
+                    finishedThinking = true;
+                    thinkBuffer = "";
+                    if (afterThink) {
+                      fullReply += afterThink;
+                      if (!responseClosed) {
+                        res.write(
+                          `data: ${JSON.stringify({ token: afterThink })}\n\n`
+                        );
+                      }
+                    }
+                  }
+                } else if (trimmedStart.length >= 7) {
+                  finishedThinking = true;
+                  fullReply += thinkBuffer;
+                  if (!responseClosed) {
+                    res.write(
+                      `data: ${JSON.stringify({ token: thinkBuffer })}\n\n`
+                    );
+                  }
+                  thinkBuffer = "";
+                }
+              } else {
+                fullReply += rawToken;
+                if (!responseClosed) {
+                  res.write(`data: ${JSON.stringify({ token: rawToken })}\n\n`);
+                }
               }
             }
-          }
 
-          groqSuccess = true;
-          break;
-        } catch (err) {
-          lastGroqError =
-            err?.error?.message || err?.message || "Gagal menghubungi Groq API.";
-          console.warn(
-            `⚠️ ${label} gagal (${lastGroqError}), mencoba key berikutnya...`
-          );
+            // Flush sisa buffer jika stream selesai sebelum 7 karakter
+            if (!finishedThinking && thinkBuffer) {
+              const cleanedLeftover = thinkBuffer
+                .replace(/<think>[\s\S]*?<\/think>/gi, "")
+                .trimStart();
+              if (cleanedLeftover) {
+                fullReply += cleanedLeftover;
+                if (!responseClosed) {
+                  res.write(
+                    `data: ${JSON.stringify({ token: cleanedLeftover })}\n\n`
+                  );
+                }
+              }
+            }
 
-          if (fullReply.length > 0) {
             groqSuccess = true;
-            break;
+            break outerModelLoop;
+          } catch (err) {
+            lastGroqError =
+              err?.error?.message || err?.message || "Gagal menghubungi Groq API.";
+            console.warn(
+              `⚠️ ${modelName} (${label}) gagal (${lastGroqError}), mencoba fallback berikutnya...`
+            );
+
+            if (fullReply.length > 0) {
+              groqSuccess = true;
+              break outerModelLoop;
+            }
+
+            // Jika error disebabkan oleh kapasitas/limit/akses model itu sendiri (413/404/400), langsung lompat ke model Qwen berikutnya tanpa mengulang key lain untuk model yang sama
+            const isModelLevelError =
+              err?.status === 404 ||
+              err?.status === 413 ||
+              /request too large|does not exist|model_not_found|decommissioned/i.test(
+                lastGroqError
+              );
+
+            if (isModelLevelError) {
+              break;
+            }
           }
         }
       }
