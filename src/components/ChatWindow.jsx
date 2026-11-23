@@ -13,6 +13,14 @@ import {
   GENERAL_QUICK_PROMPTS,
 } from "../constants/quickPrompts";
 
+function isQuizRequestPrompt(text) {
+  if (!text) return false;
+  if (/^ini jawaban quiz saya/i.test(text.trim())) return false;
+  return /\b(quiz|kuis|pilihan\s+ganda|latihan\s+soal|buatkan\s+soal)\b/i.test(
+    text
+  );
+}
+
 function ChatWindow({
   isSidebarOpen,
   onToggleSidebar,
@@ -57,10 +65,13 @@ function ChatWindow({
   );
   const currentTitle = activeChat ? activeChat.title : "New Chat";
 
-  // Status kesibukan khusus untuk chat yang sedang dibuka sekarang (bukan global!)
   const currentStreamPhase = streamingStates?.[String(currentChatId)] || null;
-  const isCurrentChatThinking = currentStreamPhase === "thinking";
-  const isCurrentChatStreaming = currentStreamPhase === "streaming";
+  const isCurrentChatThinking =
+    currentStreamPhase === "thinking" ||
+    currentStreamPhase === "thinking-quiz";
+  const isCurrentChatStreaming =
+    currentStreamPhase === "streaming" ||
+    currentStreamPhase === "streaming-quiz";
   const isCurrentChatBusy = Boolean(currentStreamPhase);
 
   useEffect(() => {
@@ -135,12 +146,12 @@ function ChatWindow({
     setEditingMsgText("");
   }, [currentChatId]);
 
-  function setChatThinking(targetChatId, active) {
+  function setChatThinking(targetChatId, active, isQuiz = false) {
     const idStr = String(targetChatId);
     setStreamingStates((prev) => {
       const next = { ...prev };
       if (active) {
-        next[idStr] = "thinking";
+        next[idStr] = isQuiz ? "thinking-quiz" : "thinking";
       } else {
         delete next[idStr];
       }
@@ -207,6 +218,7 @@ function ChatWindow({
       : images
       ? [images]
       : [];
+    const quizMode = isQuizRequestPrompt(cleanPrompt);
 
     const userMessage = {
       sender: "user",
@@ -226,10 +238,13 @@ function ChatWindow({
       (prev) => [...prev, userMessage],
       { mode: aiMode, title: "New Chat" }
     );
-    setChatThinking(targetChatId, true);
+    setChatThinking(targetChatId, true, quizMode);
 
     requestAnimationFrame(() => {
-      if (chatAreaRef.current && String(activeChatIdRef.current) === targetChatId) {
+      if (
+        chatAreaRef.current &&
+        String(activeChatIdRef.current) === targetChatId
+      ) {
         chatAreaRef.current.scrollTo({
           top: chatAreaRef.current.scrollHeight,
           behavior: "smooth",
@@ -250,7 +265,9 @@ function ChatWindow({
           shouldUpdateTitle,
           mode: aiMode,
         },
-        targetChatId
+        targetChatId,
+        "",
+        { isQuiz: quizMode }
       );
     } catch (error) {
       setChatThinking(targetChatId, false);
@@ -290,11 +307,12 @@ function ChatWindow({
 
     const targetChatId = String(currentChatId);
     const shouldUpdateTitle = !isCustomRenamed && index === 0;
+    const quizMode = isQuizRequestPrompt(trimmed);
 
     onUpdateChatMessages(targetChatId, [...keptBefore, editedUserMessage], {
       mode: aiMode,
     });
-    setChatThinking(targetChatId, true);
+    setChatThinking(targetChatId, true, quizMode);
 
     try {
       await streamAIResponse(
@@ -307,7 +325,9 @@ function ChatWindow({
           isEdited: true,
           mode: aiMode,
         },
-        targetChatId
+        targetChatId,
+        "",
+        { isQuiz: quizMode }
       );
     } catch (error) {
       setChatThinking(targetChatId, false);
@@ -335,7 +355,7 @@ function ChatWindow({
 
   async function handleGenerateQuiz(content) {
     const targetChatId = String(currentChatId);
-    setChatThinking(targetChatId, true);
+    setChatThinking(targetChatId, true, true);
 
     try {
       const domainLabel = isGeneral ? "materi" : "materi Basis Data";
@@ -364,7 +384,8 @@ D. Pilihan D`;
           mode: aiMode,
         },
         targetChatId,
-        isGeneral ? "# Quiz Latihan\n\n" : "# Quiz Basis Data\n\n"
+        isGeneral ? "# Quiz Latihan\n\n" : "# Quiz Basis Data\n\n",
+        { isQuiz: true }
       );
     } catch {
       setChatThinking(targetChatId, false);
@@ -375,8 +396,14 @@ D. Pilihan D`;
     }
   }
 
-  // Empty state hanya tergantung pada chat yang sedang dibuka saat ini
   const isEmptyState = messages.length === 0 && !isCurrentChatBusy;
+
+  const thinkingLabelText =
+    currentStreamPhase === "thinking-quiz"
+      ? "Sedang membuat soal quiz..."
+      : isGeneral
+      ? "StudyMate sedang berpikir..."
+      : "Menganalisis struktur basis data...";
 
   return (
     <div
@@ -494,9 +521,7 @@ D. Pilihan D`;
                       <span className="anim-allow"></span>
                     </div>
                     <span className="ai-thinking-label anim-allow">
-                      {isGeneral
-                        ? "StudyMate sedang berpikir..."
-                        : "Menganalisis struktur basis data..."}
+                      {thinkingLabelText}
                     </span>
                   </div>
                 </div>

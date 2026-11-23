@@ -7,7 +7,6 @@ export function useChatStream({
   onUpdateTitle,
   setStreamingStates,
 }) {
-  // Simpan AbortController & RAF secara terpisah per chatId agar banyak chat bisa jalan bersamaan
   const controllersMapRef = useRef({});
   const rafMapRef = useRef({});
 
@@ -37,10 +36,15 @@ export function useChatStream({
     updateChatStreamStatus(idStr, null);
   }
 
-  async function streamAIResponse(payload, targetChatId, initialPrefix = "") {
+  async function streamAIResponse(
+    payload,
+    targetChatId,
+    initialPrefix = "",
+    options = {}
+  ) {
     const idStr = String(targetChatId);
+    const isQuiz = Boolean(options.isQuiz);
 
-    // Hentikan stream lama hanya jika berasal dari chatId yang sama
     if (controllersMapRef.current[idStr]) {
       controllersMapRef.current[idStr].abort();
     }
@@ -64,19 +68,22 @@ export function useChatStream({
 
       if (!isAiBubbleCreated) {
         isAiBubbleCreated = true;
-        updateChatStreamStatus(idStr, "streaming");
+        updateChatStreamStatus(idStr, isQuiz ? "streaming-quiz" : "streaming");
         onUpdateChatMessages(idStr, (prev) => [
           ...prev,
-          { sender: "ai", text: displayedText },
+          { sender: "ai", text: displayedText, isQuiz },
         ]);
       } else {
         onUpdateChatMessages(idStr, (prev) => {
-          if (prev.length === 0) return [{ sender: "ai", text: displayedText }];
+          if (prev.length === 0) {
+            return [{ sender: "ai", text: displayedText, isQuiz }];
+          }
           const updated = [...prev];
           updated[updated.length - 1] = {
             ...updated[updated.length - 1],
             sender: "ai",
             text: displayedText,
+            isQuiz: updated[updated.length - 1].isQuiz || isQuiz,
           };
           return updated;
         });
@@ -122,7 +129,6 @@ export function useChatStream({
 
     try {
       const serializedBody = JSON.stringify(payload);
-      // Gunakan keepalive untuk payload < 60KB agar request tetap terkirim meski tab langsung ditutup
       const canUseKeepalive = serializedBody.length < 60000;
 
       const response = await fetch(`${API_BASE_URL}/chat`, {

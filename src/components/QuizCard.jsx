@@ -1,10 +1,19 @@
 import { useMemo, useState } from "react";
 import "./QuizCard.css";
 
-/**
- * Mem-parsing blok soal pilihan ganda dari teks AI menjadi objek terstruktur:
- * [{ number: 1, question: "...", options: [{ key: "A", text: "..." }, ...] }, ...]
- */
+function renderFormattedInline(text) {
+  if (!text) return null;
+  const cleaned = text.replace(/\*([^*]+)\*/g, "$1");
+  const parts = cleaned.split(/(`[^`]+`)/g);
+
+  return parts.map((part, idx) => {
+    if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
+      return <code key={idx}>{part.slice(1, -1)}</code>;
+    }
+    return <span key={idx}>{part}</span>;
+  });
+}
+
 export function parseQuizFromMarkdown(text) {
   if (!text) return null;
 
@@ -14,14 +23,14 @@ export function parseQuizFromMarkdown(text) {
   let introLines = [];
   let hasStartedQuestions = false;
 
-  const questionRegex = /^(?:###\s*)?(?:\*\*)?(?:Nomor\s*)?(\d+)[.)]\s*(?:\*\*)?\s*(.+)$/i;
+  const questionRegex =
+    /^(?:###\s*)?(?:\*\*)?(?:Nomor\s*)?(\d+)[.)]\s*(?:\*\*)?\s*(.+)$/i;
   const optionRegex = /^(?:[-*]\s*)?(?:\*\*)?([A-E])[.)]\s*(?:\*\*)?\s*(.+)$/i;
 
   for (let rawLine of lines) {
     const line = rawLine.trim();
     if (!line) continue;
 
-    // Abaikan baris judul markdown "# Quiz..." agar tidak mengganggu intro
     if (!hasStartedQuestions && line.startsWith("#")) {
       introLines.push(line.replace(/^#+\s*/, ""));
       continue;
@@ -29,7 +38,6 @@ export function parseQuizFromMarkdown(text) {
 
     const qMatch = line.match(questionRegex);
     if (qMatch && !line.match(/^[A-E][.)]/i)) {
-      // Pastikan baris berikutnya atau struktur ini memang soal pilihan ganda
       if (currentQ && currentQ.options.length >= 2) {
         questions.push(currentQ);
       }
@@ -52,7 +60,6 @@ export function parseQuizFromMarkdown(text) {
     }
 
     if (currentQ && currentQ.options.length === 0) {
-      // Lanjutan teks pertanyaan multi-baris
       currentQ.question += " " + line.replace(/\*\*/g, "");
     } else if (!hasStartedQuestions) {
       introLines.push(line.replace(/\*\*/g, ""));
@@ -63,7 +70,6 @@ export function parseQuizFromMarkdown(text) {
     questions.push(currentQ);
   }
 
-  // Hanya aktifkan UI Quiz Interaktif jika minimal ada 2 soal pilihan ganda yang valid
   if (questions.length < 2) return null;
 
   return {
@@ -96,7 +102,6 @@ function QuizCard({ quizData, onSubmitAnswers, disabled }) {
     if (!allAnswered || isSubmitted || disabled) return;
     setIsSubmitted(true);
 
-    // Format jawaban pengguna untuk dikirim ke AI agar dinilai & diberi skor
     const formattedSubmission = quizData.questions
       .map((q) => {
         const chosenKey = selectedAnswers[q.number];
@@ -105,7 +110,7 @@ function QuizCard({ quizData, onSubmitAnswers, disabled }) {
       })
       .join("\n");
 
-    const evaluationPrompt = `Ini jawaban quiz saya:\n\n${formattedSubmission}\n\nTolong periksa semua jawaban saya berdasarkan soal quiz sebelumnya! Berikan:\n1. **Skor Nilai** (skala 0–100)\n2. **Rekap Jumlah Benar & Salah** (contoh: Benar X dari ${totalQuestions} soal)\n3. ** Koreksi & Pembahasan Singkat** untuk setiap nomor (tandai mana yang Benar ✅ dan mana yang Salah ❌ beserta jawaban yang seharusnya).`;
+    const evaluationPrompt = `Ini jawaban quiz saya:\n\n${formattedSubmission}\n\nTolong periksa semua jawaban saya berdasarkan soal quiz sebelumnya! Berikan:\n1. **Skor Nilai** (skala 0–100)\n2. **Rekap Jumlah Benar & Salah** (contoh: Benar X dari ${totalQuestions} soal)\n3. **Koreksi & Pembahasan Singkat** untuk setiap nomor (tandai mana yang Benar ✅ dan mana yang Salah ❌ beserta jawaban yang seharusnya).`;
 
     onSubmitAnswers(evaluationPrompt);
   }
@@ -130,7 +135,9 @@ function QuizCard({ quizData, onSubmitAnswers, disabled }) {
             <div key={q.number} className="quiz-question-box">
               <div className="quiz-question-header">
                 <span className="quiz-number-pill">Nomor {q.number}</span>
-                <p className="quiz-question-text">{q.question}</p>
+                <p className="quiz-question-text">
+                  {renderFormattedInline(q.question)}
+                </p>
               </div>
 
               <div className="quiz-options-box">
@@ -150,7 +157,9 @@ function QuizCard({ quizData, onSubmitAnswers, disabled }) {
                         {isSelected && <span className="quiz-option-dot" />}
                       </span>
                       <span className="quiz-option-key">{opt.key}.</span>
-                      <span className="quiz-option-text">{opt.text}</span>
+                      <span className="quiz-option-text">
+                        {renderFormattedInline(opt.text)}
+                      </span>
                     </button>
                   );
                 })}

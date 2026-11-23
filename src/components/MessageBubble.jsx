@@ -10,6 +10,14 @@ function formatMarkdownTables(text) {
     .replace(/\|\s*\|\s*(?=[a-zA-Z0-9_:*(-])/g, "|\n|");
 }
 
+function looksLikeQuizInProgress(text) {
+  if (!text) return false;
+  const trimmed = text.trim();
+  if (/^#\s*Quiz\b/i.test(trimmed)) return true;
+  if (/(?:^|\n)1[.)]\s+.+\n\s*A[.)]\s+/i.test(trimmed)) return true;
+  return false;
+}
+
 function MessageBubble({
   msg,
   index,
@@ -136,6 +144,10 @@ function MessageBubble({
     );
   }
 
+  const isStreamingQuiz =
+    isCurrentlyStreamingMsg &&
+    (msg.isQuiz || looksLikeQuizInProgress(msg.text));
+
   const parsedQuiz = !isCurrentlyStreamingMsg
     ? parseQuizFromMarkdown(msg.text)
     : null;
@@ -143,7 +155,18 @@ function MessageBubble({
   return (
     <div className="message-row ai">
       <div className="ai-message">
-        {parsedQuiz ? (
+        {isStreamingQuiz ? (
+          <div className="ai-thinking-wrapper anim-allow">
+            <div className="typing anim-allow">
+              <span className="anim-allow"></span>
+              <span className="anim-allow"></span>
+              <span className="anim-allow"></span>
+            </div>
+            <span className="ai-thinking-label anim-allow">
+              Sedang membuat soal quiz...
+            </span>
+          </div>
+        ) : parsedQuiz ? (
           <QuizCard
             quizData={parsedQuiz}
             onSubmitAnswers={onSubmitQuizAnswers}
