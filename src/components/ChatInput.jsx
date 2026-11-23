@@ -66,6 +66,10 @@ function compressImageToDataUrl(file) {
       return;
     }
 
+    const supportsTransparency = ["image/png", "image/webp", "image/gif"].includes(
+      file.type
+    );
+
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
@@ -87,9 +91,20 @@ function compressImageToDataUrl(file) {
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
 
-        resolve(canvas.toDataURL("image/jpeg", 0.82));
+        if (supportsTransparency) {
+          const pngDataUrl = canvas.toDataURL("image/png");
+          // Jika ukuran PNG terlalu besar (> ~1.5 MB), gunakan WebP yang tetap mendukung transparansi penuh
+          if (pngDataUrl.length > 2_000_000) {
+            resolve(canvas.toDataURL("image/webp", 0.9));
+          } else {
+            resolve(pngDataUrl);
+          }
+        } else {
+          resolve(canvas.toDataURL("image/jpeg", 0.85));
+        }
       };
       img.onerror = () => resolve(null);
       img.src = event.target.result;

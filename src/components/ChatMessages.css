@@ -29,23 +29,28 @@
   display: block;
   max-width: 280px;
   max-height: 240px;
-  width: 100%;
-  object-fit: cover;
-  border-radius: 18px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 16px;
+  background: transparent;
   cursor: zoom-in;
   border: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  box-shadow: none;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.22));
 }
 
 .user-message-images-grid.multi .user-message-image {
   display: block;
   width: 124px;
   height: 124px;
-  object-fit: cover;
-  border-radius: 16px;
+  object-fit: contain;
+  border-radius: 14px;
+  background: transparent;
   cursor: zoom-in;
   border: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  box-shadow: none;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.22));
 }
 
 .user-message-toolbar {
