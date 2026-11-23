@@ -1,38 +1,56 @@
-import { useRef, useState } from "react";
+import { useRef } from "react";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
-export function useChatStream({ setMessages, onUpdateTitle }) {
-  const [loading, setLoading] = useState(false);
-  const [streamingChatId, setStreamingChatId] = useState(null);
+export function useChatStream({
+  onUpdateChatMessages,
+  onUpdateTitle,
+  setStreamingStates,
+}) {
+  // Simpan AbortController & RAF secara terpisah per chatId agar banyak chat bisa jalan bersamaan
+  const controllersMapRef = useRef({});
+  const rafMapRef = useRef({});
 
-  const abortControllerRef = useRef(null);
-  const rafIdRef = useRef(null);
+  function updateChatStreamStatus(chatId, status) {
+    const idStr = String(chatId);
+    setStreamingStates((prev) => {
+      const next = { ...prev };
+      if (!status) {
+        delete next[idStr];
+      } else {
+        next[idStr] = status;
+      }
+      return next;
+    });
+  }
 
-  function stopGenerating() {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
+  function stopGenerating(chatId) {
+    const idStr = String(chatId);
+    if (controllersMapRef.current[idStr]) {
+      controllersMapRef.current[idStr].abort();
+      delete controllersMapRef.current[idStr];
     }
-    if (rafIdRef.current) {
-      cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = null;
+    if (rafMapRef.current[idStr]) {
+      cancelAnimationFrame(rafMapRef.current[idStr]);
+      delete rafMapRef.current[idStr];
     }
-    setLoading(false);
-    setStreamingChatId(null);
+    updateChatStreamStatus(idStr, null);
   }
 
   async function streamAIResponse(payload, targetChatId, initialPrefix = "") {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    const idStr = String(targetChatId);
+
+    // Hentikan stream lama hanya jika berasal dari chatId yang sama
+    if (controllersMapRef.current[idStr]) {
+      controllersMapRef.current[idStr].abort();
     }
-    if (rafIdRef.current) {
-      cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = null;
+    if (rafMapRef.current[idStr]) {
+      cancelAnimationFrame(rafMapRef.current[idStr]);
+      delete rafMapRef.current[idStr];
     }
 
     const controller = new AbortController();
-    abortControllerRef.current = controller;
+    controllersMapRef.current[idStr] = controller;
 
     let pendingQueue = initialPrefix || "";
     let displayedText = "";
@@ -40,16 +58,19 @@ export function useChatStream({ setMessages, onUpdateTitle }) {
     let streamFinished = false;
     let receivedTitle = null;
 
-    function appendChunkToMessage(chunk) {
+    function appendChunkToTargetChat(chunk) {
       if (!chunk) return;
       displayedText += chunk;
 
       if (!isAiBubbleCreated) {
         isAiBubbleCreated = true;
-        setLoading(false);
-        setMessages((prev) => [...prev, { sender: "ai", text: displayedText }]);
+        updateChatStreamStatus(idStr, "streaming");
+        onUpdateChatMessages(idStr, (prev) => [
+          ...prev,
+          { sender: "ai", text: displayedText },
+        ]);
       } else {
-        setMessages((prev) => {
+        onUpdateChatMessages(idStr, (prev) => {
           if (prev.length === 0) return [{ sender: "ai", text: displayedText }];
           const updated = [...prev];
           updated[updated.length - 1] = {
@@ -62,20 +83,17 @@ export function useChatStream({ setMessages, onUpdateTitle }) {
       }
     }
 
-    // Loop ketik adaptif 60fps: halus saat antrean pendek, ngebut otomatis saat antrean panjang
     const typingPromise = new Promise((resolve) => {
       function tick() {
         if (controller.signal.aborted) {
-          rafIdRef.current = null;
+          delete rafMapRef.current[idStr];
           resolve();
           return;
         }
 
         if (pendingQueue.length > 0) {
-          // Ambil minimal 6 karakter atau 1/8 dari sisa antrean agar tidak pernah tertinggal
           let sliceLen = Math.max(6, Math.ceil(pendingQueue.length / 8));
 
-          // Potong di batas spasi terdekat agar kata tidak terbelah setengah
           if (sliceLen < pendingQueue.length) {
             const nextSpace = pendingQueue.indexOf(" ", sliceLen);
             if (nextSpace !== -1 && nextSpace - sliceLen <= 12) {
@@ -87,27 +105,32 @@ export function useChatStream({ setMessages, onUpdateTitle }) {
 
           const chunk = pendingQueue.slice(0, sliceLen);
           pendingQueue = pendingQueue.slice(sliceLen);
-          appendChunkToMessage(chunk);
+          appendChunkToTargetChat(chunk);
         }
 
         if (streamFinished && pendingQueue.length === 0) {
-          rafIdRef.current = null;
+          delete rafMapRef.current[idStr];
           resolve();
           return;
         }
 
-        rafIdRef.current = requestAnimationFrame(tick);
+        rafMapRef.current[idStr] = requestAnimationFrame(tick);
       }
 
-      rafIdRef.current = requestAnimationFrame(tick);
+      rafMapRef.current[idStr] = requestAnimationFrame(tick);
     });
 
     try {
+      const serializedBody = JSON.stringify(payload);
+      // Gunakan keepalive untuk payload < 60KB agar request tetap terkirim meski tab langsung ditutup
+      const canUseKeepalive = serializedBody.length < 60000;
+
       const response = await fetch(`${API_BASE_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: serializedBody,
         signal: controller.signal,
+        keepalive: canUseKeepalive,
       });
 
       if (!response.ok || !response.body) {
@@ -166,7 +189,7 @@ export function useChatStream({ setMessages, onUpdateTitle }) {
       await typingPromise;
 
       if (receivedTitle && onUpdateTitle) {
-        onUpdateTitle(targetChatId, receivedTitle);
+        onUpdateTitle(idStr, receivedTitle);
       }
     } catch (err) {
       streamFinished = true;
@@ -174,19 +197,14 @@ export function useChatStream({ setMessages, onUpdateTitle }) {
         throw err;
       }
     } finally {
-      if (abortControllerRef.current === controller) {
-        abortControllerRef.current = null;
-        setLoading(false);
-        setStreamingChatId(null);
+      if (controllersMapRef.current[idStr] === controller) {
+        delete controllersMapRef.current[idStr];
+        updateChatStreamStatus(idStr, null);
       }
     }
   }
 
   return {
-    loading,
-    setLoading,
-    streamingChatId,
-    setStreamingChatId,
     streamAIResponse,
     stopGenerating,
   };

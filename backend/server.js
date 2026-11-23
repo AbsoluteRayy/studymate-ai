@@ -352,10 +352,10 @@ app.post("/chat", async (req, res) => {
           const decoder = new TextDecoder("utf-8");
           let buffer = "";
 
+          // Tetap lanjutkan generasi di latar belakang meskipun browser client ditutup
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            if (responseClosed) break;
 
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split("\n");
@@ -375,7 +375,9 @@ app.post("/chat", async (req, res) => {
                     .join("") || "";
                 if (chunkText) {
                   fullReply += chunkText;
-                  res.write(`data: ${JSON.stringify({ token: chunkText })}\n\n`);
+                  if (!responseClosed) {
+                    res.write(`data: ${JSON.stringify({ token: chunkText })}\n\n`);
+                  }
                 }
               } catch {
                 // Abaikan chunk parsial
@@ -393,7 +395,7 @@ app.post("/chat", async (req, res) => {
         }
       }
 
-      if (!geminiSuccess && !responseClosed) {
+      if (!geminiSuccess) {
         throw new Error(lastErrMsg);
       }
     } else {
@@ -425,12 +427,14 @@ app.post("/chat", async (req, res) => {
             stream: true,
           });
 
+          // Tetap lanjutkan generasi di server meskipun browser/tab ditutup
           for await (const chunk of stream) {
-            if (responseClosed) break;
             const token = chunk.choices[0]?.delta?.content || "";
             if (token) {
               fullReply += token;
-              res.write(`data: ${JSON.stringify({ token })}\n\n`);
+              if (!responseClosed) {
+                res.write(`data: ${JSON.stringify({ token })}\n\n`);
+              }
             }
           }
 
@@ -450,14 +454,9 @@ app.post("/chat", async (req, res) => {
         }
       }
 
-      if (!groqSuccess && !responseClosed) {
+      if (!groqSuccess) {
         throw new Error(lastGroqError);
       }
-    }
-
-    if (responseClosed) {
-      res.end();
-      return;
     }
 
     let generatedTitle = null;
@@ -470,7 +469,7 @@ app.post("/chat", async (req, res) => {
       console.log(`🏷️ Auto-Title Final [${activeMode}]:`, generatedTitle);
     }
 
-    // Simpan ke PostgreSQL (Neon.tech)
+    // Tetap simpan ke PostgreSQL (Neon.tech) meskipun user sudah menutup tab browser
     const database = await getDB();
     if (database && fullReply.trim()) {
       if (isEdited && sessionId) {
@@ -523,31 +522,31 @@ app.post("/chat", async (req, res) => {
       );
     }
 
-    res.write(
-      `data: ${JSON.stringify({ done: true, title: generatedTitle })}\n\n`
-    );
+    if (!responseClosed) {
+      res.write(
+        `data: ${JSON.stringify({ done: true, title: generatedTitle })}\n\n`
+      );
+    }
     res.end();
   } catch (error) {
-    if (responseClosed) {
-      res.end();
-      return;
-    }
     console.error("====================");
     console.error(error);
     console.error(error.response?.data);
     console.error("====================");
 
-    const detailError =
-      error?.error?.message ||
-      error?.response?.data?.error?.message ||
-      error.message ||
-      "Terjadi kesalahan saat menghubungi server AI.";
+    if (!responseClosed) {
+      const detailError =
+        error?.error?.message ||
+        error?.response?.data?.error?.message ||
+        error.message ||
+        "Terjadi kesalahan saat menghubungi server AI.";
 
-    res.write(
-      `data: ${JSON.stringify({
-        error: `Error AI: ${detailError}`,
-      })}\n\n`
-    );
+      res.write(
+        `data: ${JSON.stringify({
+          error: `Error AI: ${detailError}`,
+        })}\n\n`
+      );
+    }
     res.end();
   }
 });

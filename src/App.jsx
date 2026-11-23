@@ -1,268 +1,316 @@
-import "./App.css";
-import { useState, useEffect, useRef } from "react";
-
+import { useCallback, useEffect, useState } from "react";
 import Sidebar from "./components/Sidebar";
 import ChatWindow from "./components/ChatWindow";
-import DeleteModal from "./components/DeleteModal";
+import "./App.css";
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || "";
+const STORAGE_CHATS_KEY = "studymate_chats_v2";
+const STORAGE_MODE_KEY = "studymate_ai_mode";
+
+function loadSavedMode() {
+  try {
+    const saved = localStorage.getItem(STORAGE_MODE_KEY);
+    return saved === "general" ? "general" : "database";
+  } catch {
+    return "database";
+  }
+}
+
+function loadSavedChats() {
+  try {
+    const raw = localStorage.getItem(STORAGE_CHATS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistChatsSafely(chatsList) {
+  try {
+    localStorage.setItem(STORAGE_CHATS_KEY, JSON.stringify(chatsList));
+  } catch {
+    // Jika kuota localStorage penuh karena gambar base64, simpan tanpa lampiran gambar lama
+    try {
+      const lightweight = chatsList.map((chat, cIdx) => ({
+        ...chat,
+        messages: (chat.messages || []).map((m) =>
+          cIdx > 2 ? { sender: m.sender, text: m.text } : m
+        ),
+      }));
+      localStorage.setItem(STORAGE_CHATS_KEY, JSON.stringify(lightweight));
+    } catch {
+      // Abaikan jika storage diblokir browser
+    }
+  }
+}
 
 function App() {
-  // Mode AI aktif: "database" (StudyMate Basis Data) atau "general" (StudyMate General)
-  const [aiMode, setAiMode] = useState("database");
-
-  // Memuat chat yang memiliki isi percakapan; chat lama tanpa properti mode otomatis masuk ke "database"
-  const [chats, setChats] = useState(() => {
-    const savedChats = localStorage.getItem("studymate_chats");
-    if (savedChats) {
-      const parsed = JSON.parse(savedChats);
-      return parsed
-        .filter((c) => c.messages && c.messages.length > 0)
-        .map((c) => ({
-          ...c,
-          mode: c.mode || "database",
-        }));
-    }
-    return [];
-  });
-
-  // Saat pertama kali dibuka atau saat ganti mode, selalu arahkan ke New Chat baru
-  const [currentChatId, setCurrentChatId] = useState(() => Date.now());
-
-  const [draftChat, setDraftChat] = useState(() => ({
-    id: currentChatId,
-    title: "New Chat",
-    mode: "database",
-    messages: [],
-  }));
-
-  // Deteksi Mode Mobile/Tablet atau Zoom >= 250%
-  const [isMobileView, setIsMobileView] = useState(
-    () => window.innerWidth <= 768
+  const [aiMode, setAiMode] = useState(loadSavedMode);
+  const [chats, setChats] = useState(loadSavedChats);
+  const [currentChatId, setCurrentChatId] = useState(() =>
+    String(Date.now())
   );
+  const [streamingStates, setStreamingStates] = useState({});
 
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
   const [isSidebarOpen, setIsSidebarOpen] = useState(
     () => window.innerWidth > 768
   );
 
-  const userDesktopPreference = useRef(true);
-  const prevIsMobile = useRef(window.innerWidth <= 768);
+  // Simpan mode terakhir (database / general) agar diingat saat web ditutup & dibuka lagi
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_MODE_KEY, aiMode);
+    } catch {
+      // Abaikan error storage
+    }
+  }, [aiMode]);
 
-  // Delete Modal State
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [chatToDelete, setChatToDelete] = useState(null);
+  // Simpan daftar obrolan ke localStorage
+  useEffect(() => {
+    persistChatsSafely(chats);
+  }, [chats]);
 
+  // Deteksi ukuran layar mobile / zoom
   useEffect(() => {
     function handleResize() {
       const mobile = window.innerWidth <= 768;
-      setIsMobileView(mobile);
-
-      if (mobile !== prevIsMobile.current) {
-        if (mobile) {
-          setIsSidebarOpen(false);
-        } else {
-          setIsSidebarOpen(userDesktopPreference.current);
-        }
-        prevIsMobile.current = mobile;
-      }
+      setIsMobile(mobile);
     }
-
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  function handleToggleSidebar() {
-    setIsSidebarOpen((prev) => {
-      const nextState = !prev;
-      if (!isMobileView) {
-        userDesktopPreference.current = nextState;
-      }
-      return nextState;
-    });
-  }
-
-  // Simpan hanya chat yang sudah memiliki pesan ke localStorage
+  // Sinkronkan riwayat dari PostgreSQL saat web dibuka (memulihkan chat yang ditinggal saat browser ditutup)
   useEffect(() => {
-    const validChats = chats.filter((c) => c.messages && c.messages.length > 0);
-    localStorage.setItem("studymate_chats", JSON.stringify(validChats));
-  }, [chats]);
+    let isMounted = true;
 
-  // Filter daftar chat di sidebar khusus sesuai mode AI yang sedang aktif
-  const modeChats = chats.filter((c) => (c.mode || "database") === aiMode);
-
-  // Tentukan chat aktif: ambil dari daftar tersimpan jika ada, atau gunakan draftChat
-  const existingChat = modeChats.find((chat) => chat.id === currentChatId);
-  const currentChat = existingChat || draftChat;
-
-  // Fungsi Switch Mode AI (Basis Data <-> General): selalu mulai di New Chat
-  function handleSwitchMode(nextMode) {
-    if (nextMode === aiMode) return;
-
-    const newId = Date.now();
-    setAiMode(nextMode);
-    setDraftChat({
-      id: newId,
-      title: "New Chat",
-      mode: nextMode,
-      messages: [],
-    });
-    setCurrentChatId(newId);
-  }
-
-  function setMessages(updater) {
-    const targetId = currentChatId;
-    const activeModeSnapshot = aiMode;
-
-    setChats((prevChats) => {
-      const foundIndex = prevChats.findIndex((c) => c.id === targetId);
-
-      if (foundIndex !== -1) {
-        const targetChat = prevChats[foundIndex];
-        const nextMessages =
-          typeof updater === "function"
-            ? updater(targetChat.messages || [])
-            : updater;
-
-        const updatedList = [...prevChats];
-        updatedList[foundIndex] = {
-          ...targetChat,
-          messages: nextMessages,
-        };
-        return updatedList;
-      }
-
-      const baseMessages =
-        draftChat.id === targetId ? draftChat.messages || [] : [];
-      const nextMessages =
-        typeof updater === "function" ? updater(baseMessages) : updater;
-
-      if (nextMessages.length === 0) {
-        return prevChats;
-      }
-
-      const promotedChat = {
-        id: targetId,
-        title: draftChat.id === targetId ? draftChat.title : "New Chat",
-        mode: activeModeSnapshot,
-        messages: nextMessages,
-      };
-
-      return [promotedChat, ...prevChats];
-    });
-
-    setDraftChat((prevDraft) => {
-      if (prevDraft.id !== targetId) return prevDraft;
-      const nextMessages =
-        typeof updater === "function"
-          ? updater(prevDraft.messages || [])
-          : updater;
-      return {
-        ...prevDraft,
-        messages: nextMessages,
-      };
-    });
-  }
-
-  async function handleUpdateTitle(chatId, newTitle, syncBackend = true) {
-    const cleanTitle = newTitle.trim();
-    if (!cleanTitle) return;
-
-    setDraftChat((prev) =>
-      prev.id === chatId ? { ...prev, title: cleanTitle } : prev
-    );
-
-    setChats((prevChats) =>
-      prevChats.map((chat) =>
-        chat.id === chatId ? { ...chat, title: cleanTitle } : chat
-      )
-    );
-
-    if (syncBackend) {
+    async function syncHistoryFromServer() {
       try {
-        await fetch(`/chats/${chatId}/title`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: cleanTitle, mode: aiMode }),
+        const res = await fetch(`${API_BASE_URL}/history`);
+        if (!res.ok) return;
+        const payload = await res.json();
+        const sessions = Array.isArray(payload.sessions) ? payload.sessions : [];
+        const rows = Array.isArray(payload.data) ? payload.data : [];
+
+        if (rows.length === 0 && sessions.length === 0) return;
+
+        // Urutkan kronologis (lama -> baru)
+        const chronologicalRows = [...rows].reverse();
+        const messagesBySession = {};
+
+        for (const row of chronologicalRows) {
+          const sid = row.session_id ? String(row.session_id) : null;
+          if (!sid) continue;
+          if (!messagesBySession[sid]) {
+            messagesBySession[sid] = [];
+          }
+          if (row.question) {
+            messagesBySession[sid].push({
+              sender: "user",
+              text: row.question,
+            });
+          }
+          if (row.answer) {
+            messagesBySession[sid].push({
+              sender: "ai",
+              text: row.answer,
+            });
+          }
+        }
+
+        const sessionMetaMap = {};
+        for (const s of sessions) {
+          sessionMetaMap[String(s.id)] = s;
+        }
+
+        if (!isMounted) return;
+
+        setChats((prevChats) => {
+          const mergedMap = new Map();
+
+          for (const localChat of prevChats) {
+            mergedMap.set(String(localChat.id), localChat);
+          }
+
+          const allServerIds = new Set([
+            ...Object.keys(messagesBySession),
+            ...Object.keys(sessionMetaMap),
+          ]);
+
+          for (const sid of allServerIds) {
+            const serverMsgs = messagesBySession[sid] || [];
+            const meta = sessionMetaMap[sid];
+            const existing = mergedMap.get(sid);
+
+            if (!existing) {
+              if (serverMsgs.length > 0) {
+                mergedMap.set(sid, {
+                  id: sid,
+                  title: meta?.title || "New Chat",
+                  mode: meta?.mode === "general" ? "general" : "database",
+                  messages: serverMsgs,
+                  updatedAt: meta?.updated_at
+                    ? new Date(meta.updated_at).getTime()
+                    : Date.now(),
+                });
+              }
+            } else if (serverMsgs.length > existing.messages.length) {
+              // Pertahankan gambar lokal (jika ada) pada pesan user yang sudah ada
+              const mergedMessages = serverMsgs.map((srvMsg, idx) => {
+                const localMatch = existing.messages[idx];
+                if (
+                  localMatch &&
+                  localMatch.sender === "user" &&
+                  localMatch.images?.length > 0
+                ) {
+                  return {
+                    ...srvMsg,
+                    images: localMatch.images,
+                  };
+                }
+                return srvMsg;
+              });
+
+              mergedMap.set(sid, {
+                ...existing,
+                title:
+                  existing.title === "New Chat" && meta?.title
+                    ? meta.title
+                    : existing.title,
+                messages: mergedMessages,
+              });
+            }
+          }
+
+          return Array.from(mergedMap.values()).sort(
+            (a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)
+          );
         });
-      } catch (err) {
-        console.error("Gagal menyimpan judul ke PostgreSQL:", err);
+      } catch {
+        // Offline / server lokal belum aktif, gunakan cache localStorage
       }
     }
-  }
 
-  function handleSelectChat(id) {
-    setCurrentChatId(id);
-    if (isMobileView) {
-      setIsSidebarOpen(false);
-    }
-  }
+    syncHistoryFromServer();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Update pesan pada chat tertentu (targetChatId) secara independen meski user sudah pindah ke chat lain
+  const handleUpdateChatMessages = useCallback(
+    (targetChatId, updater, meta = {}) => {
+      const idStr = String(targetChatId);
+      setChats((prevChats) => {
+        const exists = prevChats.some((c) => String(c.id) === idStr);
+        if (exists) {
+          return prevChats.map((chat) => {
+            if (String(chat.id) !== idStr) return chat;
+            const nextMessages =
+              typeof updater === "function"
+                ? updater(chat.messages || [])
+                : updater;
+            return {
+              ...chat,
+              messages: nextMessages,
+              updatedAt: Date.now(),
+            };
+          });
+        }
+
+        const initialMessages =
+          typeof updater === "function" ? updater([]) : updater;
+        const newChatEntry = {
+          id: idStr,
+          title: meta.title || "New Chat",
+          mode: meta.mode || aiMode,
+          messages: initialMessages,
+          updatedAt: Date.now(),
+        };
+        return [newChatEntry, ...prevChats];
+      });
+    },
+    [aiMode]
+  );
+
+  const handleUpdateTitle = useCallback(
+    async (chatId, newTitle, syncToBackend = false) => {
+      const idStr = String(chatId);
+      const cleanTitle = (newTitle || "").trim();
+      if (!cleanTitle) return;
+
+      setChats((prevChats) =>
+        prevChats.map((chat) =>
+          String(chat.id) === idStr ? { ...chat, title: cleanTitle } : chat
+        )
+      );
+
+      if (syncToBackend) {
+        try {
+          await fetch(`${API_BASE_URL}/chats/${idStr}/title`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: cleanTitle, mode: aiMode }),
+          });
+        } catch (err) {
+          console.error("Gagal menyinkronkan judul:", err);
+        }
+      }
+    },
+    [aiMode]
+  );
 
   function handleNewChat() {
-    if (!existingChat && draftChat.messages.length === 0) {
-      if (isMobileView) {
-        setIsSidebarOpen(false);
-      }
-      return;
-    }
-
-    const newId = Date.now();
-    setDraftChat({
-      id: newId,
-      title: "New Chat",
-      mode: aiMode,
-      messages: [],
-    });
-    setCurrentChatId(newId);
-
-    if (isMobileView) {
+    const freshId = String(Date.now());
+    setCurrentChatId(freshId);
+    if (isMobile) {
       setIsSidebarOpen(false);
     }
   }
 
-  function handleDeleteChat(chatId) {
-    if (!chats.some((c) => c.id === chatId)) {
-      handleNewChat();
-      return;
+  function handleSelectChat(chatId) {
+    setCurrentChatId(String(chatId));
+    if (isMobile) {
+      setIsSidebarOpen(false);
     }
-    setChatToDelete(chatId);
-    setShowDeleteModal(true);
   }
 
-  async function confirmDeleteChat() {
-    const targetId = chatToDelete;
+  async function handleDeleteChat(chatId) {
+    const idStr = String(chatId);
+    setChats((prev) => prev.filter((chat) => String(chat.id) !== idStr));
+
+    if (String(currentChatId) === idStr) {
+      setCurrentChatId(String(Date.now()));
+    }
 
     try {
-      await fetch(`/chats/${targetId}`, {
+      await fetch(`${API_BASE_URL}/chats/${idStr}`, {
         method: "DELETE",
       });
     } catch (err) {
-      console.error("Gagal menghapus sesi di PostgreSQL:", err);
+      console.error("Gagal menghapus sesi di backend:", err);
     }
-
-    const updatedChats = chats.filter((chat) => chat.id !== targetId);
-    setChats(updatedChats);
-
-    if (currentChatId === targetId) {
-      const newId = Date.now();
-      setDraftChat({
-        id: newId,
-        title: "New Chat",
-        mode: aiMode,
-        messages: [],
-      });
-      setCurrentChatId(newId);
-    }
-
-    setShowDeleteModal(false);
-    setChatToDelete(null);
   }
 
-  function closeDeleteModal() {
-    setShowDeleteModal(false);
-    setChatToDelete(null);
+  function handleSwitchMode(nextMode) {
+    const normalized = nextMode === "general" ? "general" : "database";
+    if (normalized === aiMode) return;
+    setAiMode(normalized);
+    setCurrentChatId(String(Date.now()));
   }
+
+  const modeChats = chats.filter((chat) => (chat.mode || "database") === aiMode);
+  const activeChat = chats.find(
+    (chat) => String(chat.id) === String(currentChatId)
+  );
+  const activeMessages = activeChat ? activeChat.messages || [] : [];
 
   return (
     <div className={`app mode-${aiMode}`}>
-      {isMobileView && isSidebarOpen && (
+      {isMobile && isSidebarOpen && (
         <div
           className="sidebar-backdrop"
           onClick={() => setIsSidebarOpen(false)}
@@ -271,8 +319,8 @@ function App() {
 
       <Sidebar
         isOpen={isSidebarOpen}
-        isMobile={isMobileView}
-        onToggle={handleToggleSidebar}
+        isMobile={isMobile}
+        onToggle={() => setIsSidebarOpen((prev) => !prev)}
         chats={modeChats}
         currentChatId={currentChatId}
         setCurrentChatId={handleSelectChat}
@@ -280,25 +328,21 @@ function App() {
         onDeleteChat={handleDeleteChat}
         aiMode={aiMode}
         onSwitchMode={handleSwitchMode}
+        streamingStates={streamingStates}
       />
 
       <ChatWindow
         isSidebarOpen={isSidebarOpen}
-        onToggleSidebar={handleToggleSidebar}
-        messages={currentChat.messages || []}
-        setMessages={setMessages}
+        onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+        messages={activeMessages}
+        onUpdateChatMessages={handleUpdateChatMessages}
         chats={modeChats}
         currentChatId={currentChatId}
         onUpdateTitle={handleUpdateTitle}
         onDeleteChat={handleDeleteChat}
         aiMode={aiMode}
-      />
-
-      <DeleteModal
-        open={showDeleteModal}
-        chatTitle={chats.find((c) => c.id === chatToDelete)?.title}
-        onClose={closeDeleteModal}
-        onConfirm={confirmDeleteChat}
+        streamingStates={streamingStates}
+        setStreamingStates={setStreamingStates}
       />
     </div>
   );

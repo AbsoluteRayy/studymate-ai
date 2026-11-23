@@ -17,12 +17,14 @@ function ChatWindow({
   isSidebarOpen,
   onToggleSidebar,
   messages,
-  setMessages,
+  onUpdateChatMessages,
   chats,
   currentChatId,
   onUpdateTitle,
   onDeleteChat,
   aiMode,
+  streamingStates,
+  setStreamingStates,
 }) {
   const chatAreaRef = useRef(null);
   const chatInputRef = useRef(null);
@@ -39,22 +41,27 @@ function ChatWindow({
   const [isCustomRenamed, setIsCustomRenamed] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
-  const {
-    loading,
-    setLoading,
-    streamingChatId,
-    setStreamingChatId,
-    streamAIResponse,
-    stopGenerating,
-  } = useChatStream({ setMessages, onUpdateTitle });
+  const { streamAIResponse, stopGenerating } = useChatStream({
+    onUpdateChatMessages,
+    onUpdateTitle,
+    setStreamingStates,
+  });
 
   const isGeneral = aiMode === "general";
   const activeQuickPrompts = isGeneral
     ? GENERAL_QUICK_PROMPTS
     : DATABASE_QUICK_PROMPTS;
 
-  const activeChat = chats.find((chat) => chat.id === currentChatId);
+  const activeChat = chats.find(
+    (chat) => String(chat.id) === String(currentChatId)
+  );
   const currentTitle = activeChat ? activeChat.title : "New Chat";
+
+  // Status kesibukan khusus untuk chat yang sedang dibuka sekarang (bukan global!)
+  const currentStreamPhase = streamingStates?.[String(currentChatId)] || null;
+  const isCurrentChatThinking = currentStreamPhase === "thinking";
+  const isCurrentChatStreaming = currentStreamPhase === "streaming";
+  const isCurrentChatBusy = Boolean(currentStreamPhase);
 
   useEffect(() => {
     const brandName = isGeneral ? "StudyMate General" : "StudyMate AI";
@@ -128,7 +135,18 @@ function ChatWindow({
     setEditingMsgText("");
   }, [currentChatId]);
 
-  const isBusy = loading || streamingChatId !== null;
+  function setChatThinking(targetChatId, active) {
+    const idStr = String(targetChatId);
+    setStreamingStates((prev) => {
+      const next = { ...prev };
+      if (active) {
+        next[idStr] = "thinking";
+      } else {
+        delete next[idStr];
+      }
+      return next;
+    });
+  }
 
   // ============================
   // Handler Drag-and-Drop Seluruh Area Chat
@@ -142,7 +160,7 @@ function ChatWindow({
     e.preventDefault();
     e.stopPropagation();
     dragCounterRef.current += 1;
-    if (!isBusy) {
+    if (!isCurrentChatBusy) {
       setIsDraggingOver(true);
     }
   }
@@ -152,7 +170,7 @@ function ChatWindow({
     e.preventDefault();
     e.stopPropagation();
     if (e.dataTransfer) {
-      e.dataTransfer.dropEffect = isBusy ? "none" : "copy";
+      e.dataTransfer.dropEffect = isCurrentChatBusy ? "none" : "copy";
     }
   }
 
@@ -174,7 +192,7 @@ function ChatWindow({
     dragCounterRef.current = 0;
     setIsDraggingOver(false);
 
-    if (isBusy) return;
+    if (isCurrentChatBusy) return;
     const droppedFiles = e.dataTransfer?.files;
     if (droppedFiles && droppedFiles.length > 0) {
       chatInputRef.current?.addFiles(droppedFiles);
@@ -182,7 +200,7 @@ function ChatWindow({
   }
 
   async function handleSend(prompt, images = []) {
-    const targetChatId = currentChatId;
+    const targetChatId = String(currentChatId);
     const cleanPrompt = (prompt || "").trim();
     const imageList = Array.isArray(images)
       ? images
@@ -203,12 +221,15 @@ function ChatWindow({
 
     const shouldUpdateTitle = !isCustomRenamed && currentTitle === "New Chat";
 
-    setMessages((prev) => [...prev, userMessage]);
-    setLoading(true);
-    setStreamingChatId(targetChatId);
+    onUpdateChatMessages(
+      targetChatId,
+      (prev) => [...prev, userMessage],
+      { mode: aiMode, title: "New Chat" }
+    );
+    setChatThinking(targetChatId, true);
 
     requestAnimationFrame(() => {
-      if (chatAreaRef.current && activeChatIdRef.current === targetChatId) {
+      if (chatAreaRef.current && String(activeChatIdRef.current) === targetChatId) {
         chatAreaRef.current.scrollTo({
           top: chatAreaRef.current.scrollHeight,
           behavior: "smooth",
@@ -225,16 +246,15 @@ function ChatWindow({
           prompt: cleanPrompt,
           images: imageList,
           history: previousHistory,
-          sessionId: String(targetChatId),
+          sessionId: targetChatId,
           shouldUpdateTitle,
           mode: aiMode,
         },
         targetChatId
       );
     } catch (error) {
-      setLoading(false);
-      setStreamingChatId(null);
-      setMessages((prev) => [
+      setChatThinking(targetChatId, false);
+      onUpdateChatMessages(targetChatId, (prev) => [
         ...prev,
         {
           sender: "ai",
@@ -268,12 +288,13 @@ function ChatWindow({
       images: preservedImages,
     };
 
-    const targetChatId = currentChatId;
+    const targetChatId = String(currentChatId);
     const shouldUpdateTitle = !isCustomRenamed && index === 0;
 
-    setMessages([...keptBefore, editedUserMessage]);
-    setLoading(true);
-    setStreamingChatId(targetChatId);
+    onUpdateChatMessages(targetChatId, [...keptBefore, editedUserMessage], {
+      mode: aiMode,
+    });
+    setChatThinking(targetChatId, true);
 
     try {
       await streamAIResponse(
@@ -281,7 +302,7 @@ function ChatWindow({
           prompt: trimmed,
           images: preservedImages,
           history: keptBefore.map((m) => ({ sender: m.sender, text: m.text })),
-          sessionId: String(targetChatId),
+          sessionId: targetChatId,
           shouldUpdateTitle,
           isEdited: true,
           mode: aiMode,
@@ -289,9 +310,8 @@ function ChatWindow({
         targetChatId
       );
     } catch (error) {
-      setLoading(false);
-      setStreamingChatId(null);
-      setMessages((prev) => [
+      setChatThinking(targetChatId, false);
+      onUpdateChatMessages(targetChatId, (prev) => [
         ...prev,
         {
           sender: "ai",
@@ -314,9 +334,8 @@ function ChatWindow({
   }
 
   async function handleGenerateQuiz(content) {
-    const targetChatId = currentChatId;
-    setLoading(true);
-    setStreamingChatId(targetChatId);
+    const targetChatId = String(currentChatId);
+    setChatThinking(targetChatId, true);
 
     try {
       const domainLabel = isGeneral ? "materi" : "materi Basis Data";
@@ -340,7 +359,7 @@ D. Pilihan D`;
         {
           prompt,
           history: [],
-          sessionId: String(targetChatId),
+          sessionId: targetChatId,
           shouldUpdateTitle: false,
           mode: aiMode,
         },
@@ -348,16 +367,16 @@ D. Pilihan D`;
         isGeneral ? "# Quiz Latihan\n\n" : "# Quiz Basis Data\n\n"
       );
     } catch {
-      setLoading(false);
-      setStreamingChatId(null);
-      setMessages((prev) => [
+      setChatThinking(targetChatId, false);
+      onUpdateChatMessages(targetChatId, (prev) => [
         ...prev,
         { sender: "ai", text: "Gagal membuat quiz." },
       ]);
     }
   }
 
-  const isEmptyState = messages.length === 0 && !loading;
+  // Empty state hanya tergantung pada chat yang sedang dibuka saat ini
+  const isEmptyState = messages.length === 0 && !isCurrentChatBusy;
 
   return (
     <div
@@ -425,7 +444,7 @@ D. Pilihan D`;
                     type="button"
                     className="quick-prompt-card"
                     onClick={() => handleSend(item.prompt)}
-                    disabled={isBusy}
+                    disabled={isCurrentChatBusy}
                   >
                     <span className="quick-prompt-title">{item.title}</span>
                     <span className="quick-prompt-desc">{item.desc}</span>
@@ -440,9 +459,9 @@ D. Pilihan D`;
                   key={index}
                   msg={msg}
                   index={index}
-                  isBusy={isBusy}
+                  isBusy={isCurrentChatBusy}
                   isCurrentlyStreamingMsg={
-                    streamingChatId === currentChatId &&
+                    isCurrentChatStreaming &&
                     index === messages.length - 1 &&
                     msg.sender === "ai"
                   }
@@ -466,7 +485,7 @@ D. Pilihan D`;
                 />
               ))}
 
-              {loading && streamingChatId === currentChatId && (
+              {isCurrentChatThinking && (
                 <div className="message-row ai">
                   <div className="ai-thinking-wrapper anim-allow">
                     <div className="typing anim-allow">
@@ -511,7 +530,6 @@ D. Pilihan D`;
         )}
       </div>
 
-      {/* Overlay Glassmorphic saat Menyeret Gambar dari Folder */}
       {isDraggingOver && (
         <div className="chat-drop-overlay">
           <div className="chat-drop-card">
@@ -555,8 +573,8 @@ D. Pilihan D`;
       <ChatInput
         ref={chatInputRef}
         onSend={handleSend}
-        onStop={stopGenerating}
-        isGenerating={isBusy}
+        onStop={() => stopGenerating(currentChatId)}
+        isGenerating={isCurrentChatBusy}
         onPreviewImage={(imgUrl) => setLightboxImage(imgUrl)}
       />
     </div>

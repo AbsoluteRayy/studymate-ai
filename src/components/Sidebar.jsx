@@ -14,6 +14,7 @@ function Sidebar({
   onDeleteChat,
   aiMode,
   onSwitchMode,
+  streamingStates = {},
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [displayedChats, setDisplayedChats] = useState(chats);
@@ -55,7 +56,7 @@ function Sidebar({
         isMobile ? "mobile-drawer" : ""
       } ${isGeneral ? "sidebar-general" : "sidebar-database"}`}
     >
-      {/* Header Sidebar: Tinggi Terkunci Stabil, Logo Bintang Polos + StudyMate AI Rapat dengan General */}
+      {/* Header Sidebar */}
       <div className="logo">
         <div className="logo-left-group">
           <button
@@ -91,7 +92,6 @@ function Sidebar({
           title="Tutup sidebar"
           aria-label="Tutup sidebar"
         >
-          {/* Ikon Default */}
           <span className="sidebar-icon-default anim-allow">
             <svg
               width="20"
@@ -108,7 +108,6 @@ function Sidebar({
             </svg>
           </span>
 
-          {/* Ikon Hover ala Gemini (Panah ke Kiri) */}
           <span className="sidebar-icon-hover anim-allow">
             <svg
               width="20"
@@ -128,7 +127,7 @@ function Sidebar({
         </button>
       </div>
 
-      {/* Tombol New Chat (Ikon Compose ala ChatGPT / Gemini) */}
+      {/* Tombol New Chat */}
       <button className="new-chat" onClick={onNewChat}>
         <svg
           width="19"
@@ -189,43 +188,52 @@ function Sidebar({
                 : "Belum ada obrolan Basis Data"}
             </div>
           ) : (
-            filteredChats.map((chat) => (
-              <div
-                key={chat.id}
-                className={`history-item ${
-                  chat.id === currentChatId ? "active" : ""
-                }`}
-                onClick={() => setCurrentChatId(chat.id)}
-                title={chat.title}
-              >
-                <span className="chat-title">{chat.title}</span>
-
-                <button
-                  className="delete-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteChat(chat.id);
-                  }}
-                  title="Hapus chat"
+            filteredChats.map((chat) => {
+              const isChatRunning = Boolean(streamingStates[String(chat.id)]);
+              return (
+                <div
+                  key={chat.id}
+                  className={`history-item ${
+                    String(chat.id) === String(currentChatId) ? "active" : ""
+                  }`}
+                  onClick={() => setCurrentChatId(chat.id)}
+                  title={chat.title}
                 >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                  {isChatRunning && (
+                    <span
+                      className="history-streaming-dot anim-allow"
+                      title="AI sedang menjawab di latar belakang"
+                    />
+                  )}
+                  <span className="chat-title">{chat.title}</span>
+
+                  <button
+                    className="delete-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteChat(chat.id);
+                    }}
+                    title="Hapus chat"
                   >
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                    <line x1="10" y1="11" x2="10" y2="17" />
-                    <line x1="14" y1="11" x2="14" y2="17" />
-                  </svg>
-                </button>
-              </div>
-            ))
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      <line x1="10" y1="11" x2="10" y2="17" />
+                      <line x1="14" y1="11" x2="14" y2="17" />
+                    </svg>
+                  </button>
+                </div>
+              );
+            })
           )}
         </div>
       </div>
