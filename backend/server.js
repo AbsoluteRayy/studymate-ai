@@ -62,17 +62,13 @@ function getGroqQwenModels() {
     .filter((m) => !m.includes("qwq"));
 
   if (envModels.length > 0) {
-    const sorted = [...new Set(envModels)].sort((a, b) => {
-      if (a.includes("qwen3-32b")) return -1;
-      if (b.includes("qwen3-32b")) return 1;
-      return 0;
-    });
-    return sorted;
+    return [...new Set(envModels)];
   }
 
+  // Prioritas #1: Qwen 3.8 27B -> jika limit/terpotong lanjut ke Qwen 3 32B
   return [
-    "qwen/qwen3-32b",
     "qwen/qwen3.8-27b",
+    "qwen/qwen3-32b",
   ];
 }
 
@@ -81,9 +77,7 @@ function getSafeMaxTokensForModel(modelName) {
   if (lower.includes("qwen3.8-27b")) {
     return 900; // Limit OTPM free tier Groq = 1000
   }
-  // Limit TPM free tier Groq untuk qwen/qwen3-32b = 6000 (Input + Output).
-  // 3500 menyisakan ~2500 token untuk System Prompt + History agar tidak terkena 413/429!
-  return 3500;
+  return 3500; // Limit TPM free tier Groq untuk qwen3-32b = 6000 (Input + Output)
 }
 
 let groqRoundRobinIndex = 0;
@@ -112,7 +106,7 @@ function getOrderedGroqClients() {
 }
 
 // ============================
-// Helper: Batasi Ukuran History Agar Input + Output Tidak Melebihi 6000 TPM Groq
+// Helper: Batasi Ukuran History Agar Input + Output Tidak Melebihi Limit Groq
 // ============================
 function trimHistoryByBudget(historyList, maxChars = 6500) {
   if (!Array.isArray(historyList) || historyList.length === 0) return [];
@@ -281,7 +275,7 @@ Jawablah menggunakan Markdown yang rapi, jelas, terstruktur, dan langsung ke int
 `;
 
 // ============================
-// Helper: Streaming Gemini Native
+// Helper: Streaming Gemini Native (Model Aktif: gemini-3.5-flash-lite & gemini-3.5-flash)
 // ============================
 async function streamFromGemini({
   activeSystemPrompt,
@@ -305,10 +299,11 @@ async function streamFromGemini({
     ? `${activeSystemPrompt}\n\nRiwayat percakapan sebelumnya:\n${historyContext}\n\nInstruksi / Pertanyaan Pengguna saat ini:\n${aiInstructionPrompt}`
     : `${activeSystemPrompt}\n\nInstruksi / Pertanyaan Pengguna:\n${aiInstructionPrompt}`;
 
+  // Menggunakan model Gemini 3.5 aktif sesuai Google AI Studio
   const geminiModels = [
+    "gemini-3.5-flash-lite",
+    "gemini-3.5-flash",
     "gemini-2.5-flash",
-    "gemini-3.8-flash",
-    "gemini-2.5-flash-lite",
   ];
 
   let collectedReply = existingPartialReply || "";
@@ -348,7 +343,7 @@ async function streamFromGemini({
         maxOutputTokens: 8192,
       };
 
-      if (modelName.includes("2.5-flash") && !modelName.includes("lite")) {
+      if (modelName === "gemini-2.5-flash") {
         generationConfig.thinkingConfig = { thinkingBudget: 0 };
       }
 
@@ -566,7 +561,6 @@ app.post("/chat", async (req, res) => {
                 stream: true,
               };
 
-              // Nonaktifkan hidden <think> pada Qwen 3 agar 100% kuota token digunakan untuk jawaban akhir
               if (modelName.includes("qwen3-32b")) {
                 requestOptions.reasoning_effort = "none";
               }
