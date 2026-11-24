@@ -64,7 +64,6 @@ function getGroqQwenModels() {
     return [...new Set(envModels)];
   }
 
-  // Urutan prioritas model Qwen di Groq (otomatis pindah jika limit / 429 / 413)
   return [
     "qwen/qwen3.8-27b",
     "qwen/qwen3-32b",
@@ -72,13 +71,12 @@ function getGroqQwenModels() {
   ];
 }
 
-// Batas max_tokens aman per model agar tidak terkena 413 OTPM Limit di Groq
 function getSafeMaxTokensForModel(modelName) {
   const lower = String(modelName || "").toLowerCase();
   if (lower.includes("qwen3.8-27b")) {
-    return 850; // Batas OTPM free tier Groq untuk model ini = 1000
+    return 900;
   }
-  return 4096;
+  return 8192;
 }
 
 let groqRoundRobinIndex = 0;
@@ -119,7 +117,7 @@ function trimHistoryByBudget(historyList, maxChars = 11500) {
     if (!item || !item.text) continue;
 
     const role = item.sender === "user" ? "user" : "assistant";
-    let content = String(item.text);
+    let content = String(item.text).replace(/<!--\s*ANSWER_KEY:[\s\S]*?-->/gi, "").trim();
 
     if (content.length > 6500) {
       content = content.slice(0, 6500) + "\n...[dipersingkat]";
@@ -140,14 +138,16 @@ function trimHistoryByBudget(historyList, maxChars = 11500) {
 // Fungsi Helper: Ekstrak Judul Ringkas & To The Point dari Balasan AI
 // ============================
 function extractSmartTitle(aiReply, userPrompt, mode = "database") {
+  const cleanReply = aiReply.replace(/<!--\s*ANSWER_KEY:[\s\S]*?-->/gi, "").trim();
+
   if (
     mode === "database" &&
-    aiReply.startsWith("Maaf, saya adalah **StudyMate AI**")
+    cleanReply.startsWith("Maaf, saya adalah **StudyMate AI**")
   ) {
     return "Topik di Luar Basis Data";
   }
 
-  const headingMatch = aiReply.match(/^#{1,3}\s+(.+)$/m);
+  const headingMatch = cleanReply.match(/^#{1,3}\s+(.+)$/m);
   if (headingMatch && headingMatch[1]) {
     const cleanHeading = headingMatch[1]
       .replace(/[*_`~#]/g, "")
@@ -184,19 +184,19 @@ function extractSmartTitle(aiReply, userPrompt, mode = "database") {
 const QUIZ_RULES_PROMPT = `
 ATURAN MODE QUIZ INTERAKTIF (WAJIB DIPATUHI):
 1. Jika pengguna meminta dibuatkan quiz, kuis, soal latihan, atau pilihan ganda:
-   - HANYA tampilkan daftar soal dan pilihan jawaban (A, B, C, D atau A–E) terlebih dahulu.
-   - DILARANG KERAS menampilkan kunci jawaban, tanda centang, jawaban benar, atau pembahasan sebelum pengguna mengirimkan jawabannya.
+   - Pastikan setiap pertanyaan memiliki tepat SATU jawaban yang benar dan akurat secara akademis.
+   - Jangan tampilkan kunci jawaban atau pembahasan di dalam teks soal untuk pengguna.
    - Gunakan format bernomor yang rapi dan konsisten seperti ini untuk setiap soal:
      1. Teks pertanyaan nomor 1?
      A. Pilihan A
      B. Pilihan B
      C. Pilihan C
      D. Pilihan D
-2. Jika pengguna mengirimkan rekap jawaban mereka (misalnya diawali dengan "Ini jawaban quiz saya..."):
-   - Periksa seluruh jawaban berdasarkan soal quiz yang diberikan sebelumnya.
-   - Tampilkan **Skor Nilai** (skala 0–100) di bagian paling atas.
-   - Tampilkan **Rekap Jumlah Benar & Salah** (contoh: Benar 4 dari 5 soal, Salah 1 soal).
-   - Berikan evaluasi dan pembahasan singkat untuk setiap nomor (tandai Benar ✅ atau Salah ❌ beserta jawaban yang seharusnya).
+   - WAJIB di baris paling akhir setelah seluruh soal selesai, sertakan kunci jawaban dalam format komentar HTML JSON persis seperti berikut (jangan beri teks lain sesudahnya):
+     <!-- ANSWER_KEY: {"1":"B","2":"A","3":"D","4":"C","5":"A"} -->
+2. Jika pengguna mengirimkan hasil evaluasi quiz dengan skor dan status Benar/Salah yang sudah dihitung sistem:
+   - WAJIB gunakan persis angka Skor Nilai, Jumlah Benar, Jumlah Salah, dan status ✅/❌ yang diberikan sistem tanpa mengubah angkanya sedikit pun.
+   - Berikan pembahasan singkat dan jelas untuk setiap nomor berdasarkan kunci jawaban resmi yang tercantum.
 `;
 
 const DATABASE_SYSTEM_PROMPT = `
@@ -269,7 +269,7 @@ Jawablah menggunakan Markdown yang rapi, jelas, terstruktur, dan langsung ke int
 `;
 
 // ============================
-// Helper: Streaming Gemini Native (Untuk Vision & Fallback Darurat Teks)
+// Helper: Streaming Gemini Native (Dengan Auto-Continue Jika Terpotong MAX_TOKENS)
 // ============================
 async function streamFromGemini({
   activeSystemPrompt,
@@ -278,6 +278,7 @@ async function streamFromGemini({
   inlineImageParts = [],
   activeMode = "database",
   onToken,
+  isResponseClosed = () => false,
 }) {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY belum diatur di Environment Variables.");
@@ -287,7 +288,7 @@ async function streamFromGemini({
     .map((m) => `${m.role === "user" ? "Pengguna" : "AI"}: ${m.content}`)
     .join("\n");
 
-  const combinedPrompt = historyContext
+  const basePrompt = historyContext
     ? `${activeSystemPrompt}\n\nRiwayat percakapan sebelumnya:\n${historyContext}\n\nInstruksi / Pertanyaan Pengguna saat ini:\n${aiInstructionPrompt}`
     : `${activeSystemPrompt}\n\nInstruksi / Pertanyaan Pengguna:\n${aiInstructionPrompt}`;
 
@@ -302,65 +303,111 @@ async function streamFromGemini({
 
   for (const modelName of geminiModels) {
     try {
-      console.log(`Streaming ke Gemini Native (${modelName}) [mode: ${activeMode}]...`);
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [{ text: combinedPrompt }, ...inlineImageParts],
+      let continuationRound = 0;
+      const maxContinuations = 2;
+
+      while (continuationRound <= maxContinuations && !isResponseClosed()) {
+        const contentsPayload =
+          continuationRound === 0
+            ? [
+                {
+                  role: "user",
+                  parts: [{ text: basePrompt }, ...inlineImageParts],
+                },
+              ]
+            : [
+                {
+                  role: "user",
+                  parts: [{ text: basePrompt }, ...inlineImageParts],
+                },
+                {
+                  role: "model",
+                  parts: [{ text: collectedReply }],
+                },
+                {
+                  role: "user",
+                  parts: [
+                    {
+                      text: "Jawabanmu terpotong di tengah kalimat. Lanjutkan langsung persis dari kata terakhir tanpa mengulang bagian sebelumnya hingga selesai tuntas.",
+                    },
+                  ],
+                },
+              ];
+
+        console.log(
+          `Streaming ke Gemini Native (${modelName}, bagian #${continuationRound + 1}) [mode: ${activeMode}]...`
+        );
+
+        const geminiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: contentsPayload,
+              generationConfig: {
+                temperature: activeMode === "general" ? 0.6 : 0.4,
+                maxOutputTokens: 8192,
               },
-            ],
-            generationConfig: {
-              temperature: activeMode === "general" ? 0.6 : 0.4,
-              maxOutputTokens: 4096,
-            },
-          }),
+            }),
+          }
+        );
+
+        if (!geminiRes.ok || !geminiRes.body) {
+          const errData = await geminiRes.json().catch(() => ({}));
+          lastErrMsg = errData?.error?.message || `HTTP ${geminiRes.status}`;
+          console.warn(`⚠️ ${modelName} gagal: ${lastErrMsg}`);
+          break;
         }
-      );
 
-      if (!geminiRes.ok || !geminiRes.body) {
-        const errData = await geminiRes.json().catch(() => ({}));
-        lastErrMsg = errData?.error?.message || `HTTP ${geminiRes.status}`;
-        console.warn(`⚠️ ${modelName} gagal: ${lastErrMsg}`);
-        continue;
-      }
+        const reader = geminiRes.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+        let lastFinishReason = "";
 
-      const reader = geminiRes.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data: ")) continue;
+            const dataStr = trimmed.slice(6);
+            if (dataStr === "[DONE]") continue;
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith("data: ")) continue;
-          const dataStr = trimmed.slice(6);
-          if (dataStr === "[DONE]") continue;
-
-          try {
-            const parsed = JSON.parse(dataStr);
-            const chunkText =
-              parsed?.candidates?.[0]?.content?.parts
-                ?.map((p) => p.text || "")
-                .join("") || "";
-            if (chunkText) {
-              collectedReply += chunkText;
-              onToken(chunkText);
+            try {
+              const parsed = JSON.parse(dataStr);
+              const candidate = parsed?.candidates?.[0];
+              if (candidate?.finishReason) {
+                lastFinishReason = candidate.finishReason;
+              }
+              const chunkText =
+                candidate?.content?.parts
+                  ?.map((p) => p.text || "")
+                  .join("") || "";
+              if (chunkText) {
+                collectedReply += chunkText;
+                onToken(chunkText);
+              }
+            } catch {
+              // Abaikan chunk parsial
             }
-          } catch {
-            // Abaikan chunk parsial
           }
         }
+
+        if (lastFinishReason === "MAX_TOKENS" && collectedReply.length > 0) {
+          console.warn(
+            `⚠️ ${modelName} terpotong MAX_TOKENS, melanjutkan otomatis (putaran ${continuationRound + 1})...`
+          );
+          continuationRound += 1;
+          continue;
+        }
+
+        break;
       }
 
       if (collectedReply) {
@@ -376,7 +423,7 @@ async function streamFromGemini({
 }
 
 // ============================
-// Chat Endpoint (Hybrid: Gemini Multi-Vision Stream + Auto-Fallback Multi-Qwen Groq + Gemini Fallback)
+// Chat Endpoint (Hybrid: Gemini Multi-Vision Stream + Auto-Fallback Multi-Qwen Groq + Auto-Continue)
 // ============================
 app.post("/chat", async (req, res) => {
   const {
@@ -460,6 +507,7 @@ app.post("/chat", async (req, res) => {
         inlineImageParts,
         activeMode,
         onToken: emitToken,
+        isResponseClosed: () => responseClosed,
       });
     } else {
       const groqClients = getOrderedGroqClients();
@@ -474,68 +522,101 @@ app.post("/chat", async (req, res) => {
 
           for (const { label, client } of groqClients) {
             try {
-              console.log(
-                `Prompt (${modelName} | max_tokens=${safeMaxTokens} via ${label}) [mode: ${activeMode}]:`,
-                aiInstructionPrompt.slice(0, 120)
-              );
+              let groqContinuation = 0;
+              const maxGroqContinuations = 2;
 
-              const stream = await client.chat.completions.create({
-                model: modelName,
-                messages: [
-                  { role: "system", content: activeSystemPrompt },
-                  ...formattedHistory,
-                  { role: "user", content: aiInstructionPrompt },
-                ],
-                temperature: activeMode === "general" ? 0.65 : 0.5,
-                max_tokens: safeMaxTokens,
-                stream: true,
-              });
+              while (groqContinuation <= maxGroqContinuations && !responseClosed) {
+                console.log(
+                  `Prompt (${modelName} | max_tokens=${safeMaxTokens} | part #${groqContinuation + 1} via ${label}) [mode: ${activeMode}]`
+                );
 
-              // Filter otomatis tag <think>...</think> jika model Qwen 3 / QwQ mengeluarkannya
-              let thinkBuffer = "";
-              let finishedThinking = false;
+                const messagesPayload =
+                  groqContinuation === 0
+                    ? [
+                        { role: "system", content: activeSystemPrompt },
+                        ...formattedHistory,
+                        { role: "user", content: aiInstructionPrompt },
+                      ]
+                    : [
+                        { role: "system", content: activeSystemPrompt },
+                        ...formattedHistory,
+                        { role: "user", content: aiInstructionPrompt },
+                        { role: "assistant", content: fullReply },
+                        {
+                          role: "user",
+                          content:
+                            "Jawabanmu terpotong batas panjang. Lanjutkan langsung dari kata terakhir tanpa mengulang bagian sebelumnya.",
+                        },
+                      ];
 
-              for await (const chunk of stream) {
-                const rawToken = chunk.choices[0]?.delta?.content || "";
-                if (!rawToken) continue;
+                const stream = await client.chat.completions.create({
+                  model: modelName,
+                  messages: messagesPayload,
+                  temperature: activeMode === "general" ? 0.65 : 0.5,
+                  max_tokens: safeMaxTokens,
+                  stream: true,
+                });
 
-                if (!finishedThinking) {
-                  thinkBuffer += rawToken;
-                  const trimmedStart = thinkBuffer.trimStart();
+                let thinkBuffer = "";
+                let finishedThinking = false;
+                let finishReason = "";
 
-                  if (trimmedStart.startsWith("<think>")) {
-                    const closeIdx = thinkBuffer.indexOf("</think>");
-                    if (closeIdx !== -1) {
-                      const afterThink = thinkBuffer
-                        .slice(closeIdx + 8)
-                        .replace(/^\s+/, "");
-                      finishedThinking = true;
-                      thinkBuffer = "";
-                      if (afterThink) {
-                        fullReply += afterThink;
-                        emitToken(afterThink);
-                      }
-                    }
-                  } else if (trimmedStart.length >= 7) {
-                    finishedThinking = true;
-                    fullReply += thinkBuffer;
-                    emitToken(thinkBuffer);
-                    thinkBuffer = "";
+                for await (const chunk of stream) {
+                  const choice = chunk.choices[0];
+                  if (choice?.finish_reason) {
+                    finishReason = choice.finish_reason;
                   }
-                } else {
-                  fullReply += rawToken;
-                  emitToken(rawToken);
-                }
-              }
+                  const rawToken = choice?.delta?.content || "";
+                  if (!rawToken) continue;
 
-              if (!finishedThinking && thinkBuffer) {
-                const cleanedLeftover = thinkBuffer
-                  .replace(/<think>[\s\S]*?<\/think>/gi, "")
-                  .trimStart();
-                if (cleanedLeftover) {
-                  fullReply += cleanedLeftover;
-                  emitToken(cleanedLeftover);
+                  if (!finishedThinking) {
+                    thinkBuffer += rawToken;
+                    const trimmedStart = thinkBuffer.trimStart();
+
+                    if (trimmedStart.startsWith("<think>")) {
+                      const closeIdx = thinkBuffer.indexOf("</think>");
+                      if (closeIdx !== -1) {
+                        const afterThink = thinkBuffer
+                          .slice(closeIdx + 8)
+                          .replace(/^\s+/, "");
+                        finishedThinking = true;
+                        thinkBuffer = "";
+                        if (afterThink) {
+                          fullReply += afterThink;
+                          emitToken(afterThink);
+                        }
+                      }
+                    } else if (trimmedStart.length >= 7) {
+                      finishedThinking = true;
+                      fullReply += thinkBuffer;
+                      emitToken(thinkBuffer);
+                      thinkBuffer = "";
+                    }
+                  } else {
+                    fullReply += rawToken;
+                    emitToken(rawToken);
+                  }
                 }
+
+                if (!finishedThinking && thinkBuffer) {
+                  const cleanedLeftover = thinkBuffer
+                    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+                    .trimStart();
+                  if (cleanedLeftover) {
+                    fullReply += cleanedLeftover;
+                    emitToken(cleanedLeftover);
+                  }
+                }
+
+                if (finishReason === "length" && fullReply.length > 0) {
+                  console.warn(
+                    `⚠️ ${modelName} terpotong finish_reason=length, melanjutkan otomatis...`
+                  );
+                  groqContinuation += 1;
+                  continue;
+                }
+
+                break;
               }
 
               groqSuccess = true;
@@ -552,7 +633,6 @@ app.post("/chat", async (req, res) => {
                 break outerModelLoop;
               }
 
-              // Jika error disebabkan oleh kapasitas/limit/akses model itu sendiri (413/404/400), langsung lompat ke model Qwen berikutnya
               const isModelLevelError =
                 err?.status === 404 ||
                 err?.status === 413 ||
@@ -568,7 +648,6 @@ app.post("/chat", async (req, res) => {
         }
       }
 
-      // Fallback terakhir ke Gemini jika semua model/key Groq limit atau tidak tersedia
       if (!groqSuccess) {
         if (process.env.GEMINI_API_KEY) {
           console.warn("⚠️ Semua model Groq limit/gagal, beralih ke Gemini fallback...");
@@ -579,6 +658,7 @@ app.post("/chat", async (req, res) => {
             inlineImageParts: [],
             activeMode,
             onToken: emitToken,
+            isResponseClosed: () => responseClosed,
           });
         } else {
           throw new Error(lastGroqError);

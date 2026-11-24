@@ -3,9 +3,14 @@ import remarkGfm from "remark-gfm";
 import CodeBlock from "./CodeBlock";
 import QuizCard, { parseQuizFromMarkdown } from "./QuizCard";
 
+function stripHiddenAnswerKey(text) {
+  if (!text) return "";
+  return text.replace(/<!--\s*ANSWER_KEY:[\s\S]*?-->/gi, "").trim();
+}
+
 function formatMarkdownTables(text) {
   if (!text) return "";
-  return text
+  return stripHiddenAnswerKey(text)
     .replace(/^([^\n|]+?)\s+(\|[^|\n]+\|)/gm, "$1\n\n$2")
     .replace(/\|\s*\|\s*(?=[a-zA-Z0-9_:*(-])/g, "|\n|");
 }
@@ -152,6 +157,8 @@ function MessageBubble({
     ? parseQuizFromMarkdown(msg.text)
     : null;
 
+  const cleanVisibleText = stripHiddenAnswerKey(msg.text);
+
   return (
     <div className="message-row ai">
       <div className="ai-message">
@@ -179,7 +186,7 @@ function MessageBubble({
               pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
             }}
           >
-            {formatMarkdownTables(msg.text)}
+            {formatMarkdownTables(cleanVisibleText)}
           </ReactMarkdown>
         )}
 
@@ -187,7 +194,7 @@ function MessageBubble({
           <div className="message-toolbar">
             <button
               className="action-btn"
-              onClick={() => onCopy(msg.text, index)}
+              onClick={() => onCopy(cleanVisibleText, index)}
             >
               {copiedIndex === index ? (
                 <>
@@ -227,7 +234,7 @@ function MessageBubble({
 
             <button
               className="action-btn"
-              onClick={() => onGenerateQuiz(msg.text)}
+              onClick={() => onGenerateQuiz(cleanVisibleText)}
             >
               <svg
                 width="15"

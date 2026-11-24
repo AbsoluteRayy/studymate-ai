@@ -14,10 +14,31 @@ function renderFormattedInline(text) {
   });
 }
 
+function extractHiddenAnswerKey(text) {
+  if (!text) return {};
+  const match = text.match(/<!--\s*ANSWER_KEY:\s*(\{[\s\S]*?\})\s*-->/i);
+  if (!match || !match[1]) return {};
+  try {
+    const parsed = JSON.parse(match[1]);
+    const normalized = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      normalized[String(k).trim()] = String(v).trim().toUpperCase();
+    }
+    return normalized;
+  } catch {
+    return {};
+  }
+}
+
 export function parseQuizFromMarkdown(text) {
   if (!text) return null;
 
-  const lines = text.split("\n");
+  const answerKeyMap = extractHiddenAnswerKey(text);
+  const visibleText = text
+    .replace(/<!--\s*ANSWER_KEY:[\s\S]*?-->/gi, "")
+    .trim();
+
+  const lines = visibleText.split("\n");
   const questions = [];
   let currentQ = null;
   let introLines = [];
@@ -42,10 +63,12 @@ export function parseQuizFromMarkdown(text) {
         questions.push(currentQ);
       }
       hasStartedQuestions = true;
+      const qNum = Number(qMatch[1]);
       currentQ = {
-        number: Number(qMatch[1]),
+        number: qNum,
         question: qMatch[2].replace(/\*\*/g, "").trim(),
         options: [],
+        correctAnswer: answerKeyMap[String(qNum)] || null,
       };
       continue;
     }
@@ -102,17 +125,58 @@ function QuizCard({ quizData, onSubmitAnswers, disabled }) {
     if (!allAnswered || isSubmitted || disabled) return;
     setIsSubmitted(true);
 
-    const formattedSubmission = quizData.questions
-      .map((q) => {
-        const chosenKey = selectedAnswers[q.number];
-        const chosenOpt = q.options.find((o) => o.key === chosenKey);
-        return `${q.number}. ${chosenKey}${chosenOpt ? ` (${chosenOpt.text})` : ""}`;
-      })
-      .join("\n");
+    const hasCompleteAnswerKey = quizData.questions.every((q) =>
+      Boolean(q.correctAnswer)
+    );
 
-    const evaluationPrompt = `Ini jawaban quiz saya:\n\n${formattedSubmission}\n\nTolong periksa semua jawaban saya berdasarkan soal quiz sebelumnya! Berikan:\n1. **Skor Nilai** (skala 0–100)\n2. **Rekap Jumlah Benar & Salah** (contoh: Benar X dari ${totalQuestions} soal)\n3. **Koreksi & Pembahasan Singkat** untuk setiap nomor (tandai mana yang Benar ✅ dan mana yang Salah ❌ beserta jawaban yang seharusnya).`;
+    if (hasCompleteAnswerKey) {
+      let correctCount = 0;
 
-    onSubmitAnswers(evaluationPrompt);
+      const detailedRecap = quizData.questions
+        .map((q) => {
+          const chosenKey = selectedAnswers[q.number];
+          const chosenOpt = q.options.find((o) => o.key === chosenKey);
+          const correctOpt = q.options.find((o) => o.key === q.correctAnswer);
+          const isCorrect = chosenKey === q.correctAnswer;
+          if (isCorrect) correctCount += 1;
+
+          return `${q.number}. Jawaban Saya: ${chosenKey}${
+            chosenOpt ? ` (${chosenOpt.text})` : ""
+          } | Kunci Resmi: ${q.correctAnswer}${
+            correctOpt ? ` (${correctOpt.text})` : ""
+          } -> ${isCorrect ? "BENAR ✅" : "SALAH ❌"}`;
+        })
+        .join("\n");
+
+      const wrongCount = totalQuestions - correctCount;
+      const finalScore = Math.round((correctCount / totalQuestions) * 100);
+
+      const evaluationPrompt = `Ini jawaban quiz saya (sudah dikoreksi otomatis oleh sistem):
+
+**Hasil Resmi:**
+- **Skor Nilai:** ${finalScore} / 100
+- **Benar:** ${correctCount} dari ${totalQuestions} soal
+- **Salah:** ${wrongCount} soal
+
+**Rincian Per Nomor:**
+${detailedRecap}
+
+Tolong tampilkan kembali rekap skor & jumlah benar/salah persis sesuai angka resmi di atas, lalu berikan pembahasan singkat dan jelas untuk setiap nomor!`;
+
+      onSubmitAnswers(evaluationPrompt);
+    } else {
+      const formattedSubmission = quizData.questions
+        .map((q) => {
+          const chosenKey = selectedAnswers[q.number];
+          const chosenOpt = q.options.find((o) => o.key === chosenKey);
+          return `${q.number}. ${chosenKey}${chosenOpt ? ` (${chosenOpt.text})` : ""}`;
+        })
+        .join("\n");
+
+      const evaluationPrompt = `Ini jawaban quiz saya:\n\n${formattedSubmission}\n\nTolong periksa semua jawaban saya berdasarkan soal quiz sebelumnya! Pastikan jumlah Benar + Salah = ${totalQuestions} dan Skor = (Jumlah Benar / ${totalQuestions}) x 100. Berikan:\n1. **Skor Nilai** (skala 0–100)\n2. **Rekap Jumlah Benar & Salah**\n3. **Koreksi & Pembahasan Singkat** untuk setiap nomor (tandai Benar ✅ dan Salah ❌ beserta jawaban yang seharusnya).`;
+
+      onSubmitAnswers(evaluationPrompt);
+    }
   }
 
   return (

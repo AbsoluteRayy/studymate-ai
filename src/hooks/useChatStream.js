@@ -90,6 +90,38 @@ export function useChatStream({
       }
     }
 
+    function processSseBlock(eventBlock) {
+      const lines = eventBlock.split("\n");
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data: ")) continue;
+        const jsonStr = trimmed.slice(6);
+
+        try {
+          const parsed = JSON.parse(jsonStr);
+          if (parsed.error) {
+            throw new Error(parsed.error);
+          }
+          if (parsed.token) {
+            pendingQueue += parsed.token;
+          }
+          if (parsed.title) {
+            receivedTitle = parsed.title;
+          }
+          if (parsed.done) {
+            streamFinished = true;
+          }
+        } catch (parseErr) {
+          if (parseErr.message && !jsonStr.startsWith("{")) {
+            continue;
+          }
+          if (parseErr.message?.startsWith("Error AI:")) {
+            throw parseErr;
+          }
+        }
+      }
+    }
+
     const typingPromise = new Promise((resolve) => {
       function tick() {
         if (controller.signal.aborted) {
@@ -129,14 +161,12 @@ export function useChatStream({
 
     try {
       const serializedBody = JSON.stringify(payload);
-      const canUseKeepalive = serializedBody.length < 60000;
 
       const response = await fetch(`${API_BASE_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: serializedBody,
         signal: controller.signal,
-        keepalive: canUseKeepalive,
       });
 
       if (!response.ok || !response.body) {
@@ -159,36 +189,14 @@ export function useChatStream({
         sseBuffer = events.pop() || "";
 
         for (const eventBlock of events) {
-          const lines = eventBlock.split("\n");
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed.startsWith("data: ")) continue;
-            const jsonStr = trimmed.slice(6);
-
-            try {
-              const parsed = JSON.parse(jsonStr);
-              if (parsed.error) {
-                throw new Error(parsed.error);
-              }
-              if (parsed.token) {
-                pendingQueue += parsed.token;
-              }
-              if (parsed.title) {
-                receivedTitle = parsed.title;
-              }
-              if (parsed.done) {
-                streamFinished = true;
-              }
-            } catch (parseErr) {
-              if (parseErr.message && !jsonStr.startsWith("{")) {
-                continue;
-              }
-              if (parseErr.message?.startsWith("Error AI:")) {
-                throw parseErr;
-              }
-            }
-          }
+          processSseBlock(eventBlock);
         }
+      }
+
+      // Flush sisa decoder & sisa sseBuffer terakhir agar kalimat penutup tidak hilang
+      sseBuffer += decoder.decode();
+      if (sseBuffer.trim()) {
+        processSseBlock(sseBuffer);
       }
 
       streamFinished = true;
