@@ -1,7 +1,8 @@
 import { useId } from "react";
 
-function BrandLogo({ size = 23 }) {
+function BrandLogo({ size = 23, mode = "database" }) {
   const gradId = useId();
+  const isGeneral = mode === "general";
 
   return (
     <svg
@@ -14,9 +15,19 @@ function BrandLogo({ size = 23 }) {
     >
       <defs>
         <linearGradient id={gradId} x1="12%" y1="12%" x2="88%" y2="88%">
-          <stop offset="0%" stopColor="#FDE08D" />
-          <stop offset="48%" stopColor="#FB923C" />
-          <stop offset="100%" stopColor="#F45D79" />
+          {isGeneral ? (
+            <>
+              <stop offset="0%" stopColor="#FDE08D" />
+              <stop offset="48%" stopColor="#FB923C" />
+              <stop offset="100%" stopColor="#F45D79" />
+            </>
+          ) : (
+            <>
+              <stop offset="0%" stopColor="#DDD6FE" />
+              <stop offset="48%" stopColor="#8B5CF6" />
+              <stop offset="100%" stopColor="#6366F1" />
+            </>
+          )}
         </linearGradient>
       </defs>
       <path

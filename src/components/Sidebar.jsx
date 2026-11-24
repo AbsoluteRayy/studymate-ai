@@ -65,7 +65,7 @@ function Sidebar({
             onClick={onNewChat}
             title="StudyMate AI — New Chat"
           >
-            <BrandLogo size={26} />
+            <BrandLogo size={26} mode={aiMode} />
           </button>
 
           <div
