@@ -67,7 +67,18 @@ function getGroqQwenModels() {
   // Urutan prioritas model Qwen di Groq (otomatis pindah jika limit / 429 / 413)
   return [
     "qwen/qwen3.8-27b",
+    "qwen/qwen3-32b",
+    "qwen-qwq-32b",
   ];
+}
+
+// Batas max_tokens aman per model agar tidak terkena 413 OTPM Limit di Groq
+function getSafeMaxTokensForModel(modelName) {
+  const lower = String(modelName || "").toLowerCase();
+  if (lower.includes("qwen3.8-27b")) {
+    return 850; // Batas OTPM free tier Groq untuk model ini = 1000
+  }
+  return 4096;
 }
 
 let groqRoundRobinIndex = 0;
@@ -103,7 +114,6 @@ function trimHistoryByBudget(historyList, maxChars = 11500) {
   const selected = [];
   let usedChars = 0;
 
-  // Iterasi dari pesan terbaru ke terlama agar konteks quiz terakhir selalu terbawa
   for (let i = historyList.length - 1; i >= 0; i--) {
     const item = historyList[i];
     if (!item || !item.text) continue;
@@ -111,7 +121,6 @@ function trimHistoryByBudget(historyList, maxChars = 11500) {
     const role = item.sender === "user" ? "user" : "assistant";
     let content = String(item.text);
 
-    // Jika satu pesan tunggal terlalu panjang, pangkas secukupnya agar muat
     if (content.length > 6500) {
       content = content.slice(0, 6500) + "\n...[dipersingkat]";
     }
@@ -260,7 +269,114 @@ Jawablah menggunakan Markdown yang rapi, jelas, terstruktur, dan langsung ke int
 `;
 
 // ============================
-// Chat Endpoint (Hybrid: Gemini Multi-Vision Stream + Auto-Fallback Multi-Qwen Groq | Dual Mode)
+// Helper: Streaming Gemini Native (Untuk Vision & Fallback Darurat Teks)
+// ============================
+async function streamFromGemini({
+  activeSystemPrompt,
+  formattedHistory,
+  aiInstructionPrompt,
+  inlineImageParts = [],
+  activeMode = "database",
+  onToken,
+}) {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY belum diatur di Environment Variables.");
+  }
+
+  const historyContext = formattedHistory
+    .map((m) => `${m.role === "user" ? "Pengguna" : "AI"}: ${m.content}`)
+    .join("\n");
+
+  const combinedPrompt = historyContext
+    ? `${activeSystemPrompt}\n\nRiwayat percakapan sebelumnya:\n${historyContext}\n\nInstruksi / Pertanyaan Pengguna saat ini:\n${aiInstructionPrompt}`
+    : `${activeSystemPrompt}\n\nInstruksi / Pertanyaan Pengguna:\n${aiInstructionPrompt}`;
+
+  const geminiModels = [
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash",
+  ];
+
+  let collectedReply = "";
+  let lastErrMsg = "Gagal menghubungi Gemini API.";
+
+  for (const modelName of geminiModels) {
+    try {
+      console.log(`Streaming ke Gemini Native (${modelName}) [mode: ${activeMode}]...`);
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [{ text: combinedPrompt }, ...inlineImageParts],
+              },
+            ],
+            generationConfig: {
+              temperature: activeMode === "general" ? 0.6 : 0.4,
+              maxOutputTokens: 4096,
+            },
+          }),
+        }
+      );
+
+      if (!geminiRes.ok || !geminiRes.body) {
+        const errData = await geminiRes.json().catch(() => ({}));
+        lastErrMsg = errData?.error?.message || `HTTP ${geminiRes.status}`;
+        console.warn(`⚠️ ${modelName} gagal: ${lastErrMsg}`);
+        continue;
+      }
+
+      const reader = geminiRes.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data: ")) continue;
+          const dataStr = trimmed.slice(6);
+          if (dataStr === "[DONE]") continue;
+
+          try {
+            const parsed = JSON.parse(dataStr);
+            const chunkText =
+              parsed?.candidates?.[0]?.content?.parts
+                ?.map((p) => p.text || "")
+                .join("") || "";
+            if (chunkText) {
+              collectedReply += chunkText;
+              onToken(chunkText);
+            }
+          } catch {
+            // Abaikan chunk parsial
+          }
+        }
+      }
+
+      if (collectedReply) {
+        return collectedReply;
+      }
+    } catch (err) {
+      lastErrMsg = err.message;
+      console.warn(`⚠️ Error ${modelName}:`, err.message);
+    }
+  }
+
+  throw new Error(lastErrMsg);
+}
+
+// ============================
+// Chat Endpoint (Hybrid: Gemini Multi-Vision Stream + Auto-Fallback Multi-Qwen Groq + Gemini Fallback)
 // ============================
 app.post("/chat", async (req, res) => {
   const {
@@ -311,13 +427,13 @@ app.post("/chat", async (req, res) => {
     responseClosed = true;
   });
 
-  try {
-    if (hasImages && !process.env.GEMINI_API_KEY) {
-      throw new Error(
-        "GEMINI_API_KEY belum diatur di Environment Variables Vercel / .env."
-      );
+  const emitToken = (tokenText) => {
+    if (!responseClosed && tokenText) {
+      res.write(`data: ${JSON.stringify({ token: tokenText })}\n\n`);
     }
+  };
 
+  try {
     const formattedHistory = trimHistoryByBudget(history, 11500);
     let fullReply = "";
 
@@ -337,233 +453,136 @@ app.post("/chat", async (req, res) => {
         };
       });
 
-      const historyContext = formattedHistory
-        .map((m) => `${m.role === "user" ? "Pengguna" : "AI"}: ${m.content}`)
-        .join("\n");
-
-      const combinedPrompt = historyContext
-        ? `${activeSystemPrompt}\n\nRiwayat percakapan sebelumnya:\n${historyContext}\n\nInstruksi / Pertanyaan Pengguna saat ini:\n${aiInstructionPrompt}`
-        : `${activeSystemPrompt}\n\nInstruksi / Pertanyaan Pengguna:\n${aiInstructionPrompt}`;
-
-      const geminiModels = [
-        "gemini-3.5-flash-lite",
-        "gemini-3.5-flash",
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
-        "gemini-2.0-flash",
-      ];
-
-      let geminiSuccess = false;
-      let lastErrMsg = "Gagal menghubungi Gemini Vision.";
-
-      for (const modelName of geminiModels) {
-        try {
-          console.log(
-            `Streaming ${rawImages.length} gambar ke Gemini Native (${modelName}) [mode: ${activeMode}]...`
-          );
-          const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                contents: [
-                  {
-                    parts: [{ text: combinedPrompt }, ...inlineImageParts],
-                  },
-                ],
-                generationConfig: {
-                  temperature: activeMode === "general" ? 0.6 : 0.4,
-                  maxOutputTokens: 4096,
-                },
-              }),
-            }
-          );
-
-          if (!geminiRes.ok || !geminiRes.body) {
-            const errData = await geminiRes.json().catch(() => ({}));
-            lastErrMsg =
-              errData?.error?.message || `HTTP ${geminiRes.status}`;
-            console.warn(`⚠️ ${modelName} gagal: ${lastErrMsg}`);
-            continue;
-          }
-
-          const reader = geminiRes.body.getReader();
-          const decoder = new TextDecoder("utf-8");
-          let buffer = "";
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() || "";
-
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (!trimmed.startsWith("data: ")) continue;
-              const dataStr = trimmed.slice(6);
-              if (dataStr === "[DONE]") continue;
-
-              try {
-                const parsed = JSON.parse(dataStr);
-                const chunkText =
-                  parsed?.candidates?.[0]?.content?.parts
-                    ?.map((p) => p.text || "")
-                    .join("") || "";
-                if (chunkText) {
-                  fullReply += chunkText;
-                  if (!responseClosed) {
-                    res.write(`data: ${JSON.stringify({ token: chunkText })}\n\n`);
-                  }
-                }
-              } catch {
-                // Abaikan chunk parsial
-              }
-            }
-          }
-
-          if (fullReply) {
-            geminiSuccess = true;
-            break;
-          }
-        } catch (err) {
-          lastErrMsg = err.message;
-          console.warn(`⚠️ Error ${modelName}:`, err.message);
-        }
-      }
-
-      if (!geminiSuccess) {
-        throw new Error(lastErrMsg);
-      }
+      fullReply = await streamFromGemini({
+        activeSystemPrompt,
+        formattedHistory,
+        aiInstructionPrompt,
+        inlineImageParts,
+        activeMode,
+        onToken: emitToken,
+      });
     } else {
       const groqClients = getOrderedGroqClients();
       const qwenModels = getGroqQwenModels();
 
-      if (groqClients.length === 0) {
-        throw new Error(
-          "GROQ_API_KEY atau GROQ_API_KEYS belum diatur di Environment Variables."
-        );
-      }
-
       let groqSuccess = false;
       let lastGroqError = "Semua API key dan model Qwen Groq sedang mencapai batas limit.";
 
-      // Auto-fallback: Coba model Qwen utama di semua key -> jika penuh/terlalu besar, otomatis pindah ke model Qwen Groq berikutnya
-      outerModelLoop: for (const modelName of qwenModels) {
-        for (const { label, client } of groqClients) {
-          try {
-            console.log(
-              `Prompt (${modelName} via ${label}) [mode: ${activeMode}]:`,
-              aiInstructionPrompt.slice(0, 120)
-            );
+      if (groqClients.length > 0) {
+        outerModelLoop: for (const modelName of qwenModels) {
+          const safeMaxTokens = getSafeMaxTokensForModel(modelName);
 
-            const stream = await client.chat.completions.create({
-              model: modelName,
-              messages: [
-                { role: "system", content: activeSystemPrompt },
-                ...formattedHistory,
-                { role: "user", content: aiInstructionPrompt },
-              ],
-              temperature: activeMode === "general" ? 0.65 : 0.5,
-              max_tokens: 4096,
-              stream: true,
-            });
-
-            // Filter otomatis tag <think>...</think> jika model Qwen 3 / QwQ mengeluarkannya
-            let thinkBuffer = "";
-            let finishedThinking = false;
-
-            for await (const chunk of stream) {
-              const rawToken = chunk.choices[0]?.delta?.content || "";
-              if (!rawToken) continue;
-
-              if (!finishedThinking) {
-                thinkBuffer += rawToken;
-                const trimmedStart = thinkBuffer.trimStart();
-
-                if (trimmedStart.startsWith("<think>")) {
-                  const closeIdx = thinkBuffer.indexOf("</think>");
-                  if (closeIdx !== -1) {
-                    const afterThink = thinkBuffer
-                      .slice(closeIdx + 8)
-                      .replace(/^\s+/, "");
-                    finishedThinking = true;
-                    thinkBuffer = "";
-                    if (afterThink) {
-                      fullReply += afterThink;
-                      if (!responseClosed) {
-                        res.write(
-                          `data: ${JSON.stringify({ token: afterThink })}\n\n`
-                        );
-                      }
-                    }
-                  }
-                } else if (trimmedStart.length >= 7) {
-                  finishedThinking = true;
-                  fullReply += thinkBuffer;
-                  if (!responseClosed) {
-                    res.write(
-                      `data: ${JSON.stringify({ token: thinkBuffer })}\n\n`
-                    );
-                  }
-                  thinkBuffer = "";
-                }
-              } else {
-                fullReply += rawToken;
-                if (!responseClosed) {
-                  res.write(`data: ${JSON.stringify({ token: rawToken })}\n\n`);
-                }
-              }
-            }
-
-            // Flush sisa buffer jika stream selesai sebelum 7 karakter
-            if (!finishedThinking && thinkBuffer) {
-              const cleanedLeftover = thinkBuffer
-                .replace(/<think>[\s\S]*?<\/think>/gi, "")
-                .trimStart();
-              if (cleanedLeftover) {
-                fullReply += cleanedLeftover;
-                if (!responseClosed) {
-                  res.write(
-                    `data: ${JSON.stringify({ token: cleanedLeftover })}\n\n`
-                  );
-                }
-              }
-            }
-
-            groqSuccess = true;
-            break outerModelLoop;
-          } catch (err) {
-            lastGroqError =
-              err?.error?.message || err?.message || "Gagal menghubungi Groq API.";
-            console.warn(
-              `⚠️ ${modelName} (${label}) gagal (${lastGroqError}), mencoba fallback berikutnya...`
-            );
-
-            if (fullReply.length > 0) {
-              groqSuccess = true;
-              break outerModelLoop;
-            }
-
-            // Jika error disebabkan oleh kapasitas/limit/akses model itu sendiri (413/404/400), langsung lompat ke model Qwen berikutnya tanpa mengulang key lain untuk model yang sama
-            const isModelLevelError =
-              err?.status === 404 ||
-              err?.status === 413 ||
-              /request too large|does not exist|model_not_found|decommissioned/i.test(
-                lastGroqError
+          for (const { label, client } of groqClients) {
+            try {
+              console.log(
+                `Prompt (${modelName} | max_tokens=${safeMaxTokens} via ${label}) [mode: ${activeMode}]:`,
+                aiInstructionPrompt.slice(0, 120)
               );
 
-            if (isModelLevelError) {
-              break;
+              const stream = await client.chat.completions.create({
+                model: modelName,
+                messages: [
+                  { role: "system", content: activeSystemPrompt },
+                  ...formattedHistory,
+                  { role: "user", content: aiInstructionPrompt },
+                ],
+                temperature: activeMode === "general" ? 0.65 : 0.5,
+                max_tokens: safeMaxTokens,
+                stream: true,
+              });
+
+              // Filter otomatis tag <think>...</think> jika model Qwen 3 / QwQ mengeluarkannya
+              let thinkBuffer = "";
+              let finishedThinking = false;
+
+              for await (const chunk of stream) {
+                const rawToken = chunk.choices[0]?.delta?.content || "";
+                if (!rawToken) continue;
+
+                if (!finishedThinking) {
+                  thinkBuffer += rawToken;
+                  const trimmedStart = thinkBuffer.trimStart();
+
+                  if (trimmedStart.startsWith("<think>")) {
+                    const closeIdx = thinkBuffer.indexOf("</think>");
+                    if (closeIdx !== -1) {
+                      const afterThink = thinkBuffer
+                        .slice(closeIdx + 8)
+                        .replace(/^\s+/, "");
+                      finishedThinking = true;
+                      thinkBuffer = "";
+                      if (afterThink) {
+                        fullReply += afterThink;
+                        emitToken(afterThink);
+                      }
+                    }
+                  } else if (trimmedStart.length >= 7) {
+                    finishedThinking = true;
+                    fullReply += thinkBuffer;
+                    emitToken(thinkBuffer);
+                    thinkBuffer = "";
+                  }
+                } else {
+                  fullReply += rawToken;
+                  emitToken(rawToken);
+                }
+              }
+
+              if (!finishedThinking && thinkBuffer) {
+                const cleanedLeftover = thinkBuffer
+                  .replace(/<think>[\s\S]*?<\/think>/gi, "")
+                  .trimStart();
+                if (cleanedLeftover) {
+                  fullReply += cleanedLeftover;
+                  emitToken(cleanedLeftover);
+                }
+              }
+
+              groqSuccess = true;
+              break outerModelLoop;
+            } catch (err) {
+              lastGroqError =
+                err?.error?.message || err?.message || "Gagal menghubungi Groq API.";
+              console.warn(
+                `⚠️ ${modelName} (${label}) gagal (${lastGroqError}), mencoba fallback berikutnya...`
+              );
+
+              if (fullReply.length > 0) {
+                groqSuccess = true;
+                break outerModelLoop;
+              }
+
+              // Jika error disebabkan oleh kapasitas/limit/akses model itu sendiri (413/404/400), langsung lompat ke model Qwen berikutnya
+              const isModelLevelError =
+                err?.status === 404 ||
+                err?.status === 413 ||
+                /request too large|does not exist|model_not_found|decommissioned|output tokens per minute/i.test(
+                  lastGroqError
+                );
+
+              if (isModelLevelError) {
+                break;
+              }
             }
           }
         }
       }
 
+      // Fallback terakhir ke Gemini jika semua model/key Groq limit atau tidak tersedia
       if (!groqSuccess) {
-        throw new Error(lastGroqError);
+        if (process.env.GEMINI_API_KEY) {
+          console.warn("⚠️ Semua model Groq limit/gagal, beralih ke Gemini fallback...");
+          fullReply = await streamFromGemini({
+            activeSystemPrompt,
+            formattedHistory,
+            aiInstructionPrompt,
+            inlineImageParts: [],
+            activeMode,
+            onToken: emitToken,
+          });
+        } else {
+          throw new Error(lastGroqError);
+        }
       }
     }
 
@@ -577,7 +596,6 @@ app.post("/chat", async (req, res) => {
       console.log(`🏷️ Auto-Title Final [${activeMode}]:`, generatedTitle);
     }
 
-    // Tetap simpan ke PostgreSQL (Neon.tech) meskipun user sudah menutup tab browser
     const database = await getDB();
     if (database && fullReply.trim()) {
       if (isEdited && sessionId) {
