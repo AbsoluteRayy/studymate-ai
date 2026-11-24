@@ -21,8 +21,11 @@ function DeleteModal({ open, chatTitle, onClose, onConfirm }) {
   if (!open) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="delete-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay anim-allow" onClick={onClose}>
+      <div
+        className="delete-modal anim-allow"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-header">
           <div className="modal-icon">
             <svg
@@ -55,11 +58,19 @@ function DeleteModal({ open, chatTitle, onClose, onConfirm }) {
         </p>
 
         <div className="modal-actions">
-          <button type="button" className="cancel-btn" onClick={onClose}>
+          <button
+            type="button"
+            className="cancel-btn anim-allow"
+            onClick={onClose}
+          >
             Batal
           </button>
 
-          <button type="button" className="confirm-btn" onClick={onConfirm}>
+          <button
+            type="button"
+            className="confirm-btn anim-allow"
+            onClick={onConfirm}
+          >
             Hapus
           </button>
         </div>

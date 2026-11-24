@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Sidebar from "./components/Sidebar";
 import ChatWindow from "./components/ChatWindow";
+import DeleteModal from "./components/DeleteModal";
 import "./App.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
@@ -96,6 +97,7 @@ function App() {
     String(Date.now())
   );
   const [streamingStates, setStreamingStates] = useState({});
+  const [chatToDelete, setChatToDelete] = useState(null);
 
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
   const [isSidebarOpen, setIsSidebarOpen] = useState(
@@ -325,8 +327,20 @@ function App() {
     }
   }
 
-  async function handleDeleteChat(chatId) {
+  function handleRequestDeleteChat(chatId) {
     const idStr = String(chatId);
+    const targetChat = chats.find((c) => String(c.id) === idStr);
+    setChatToDelete({
+      id: idStr,
+      title: targetChat?.title || "New Chat",
+    });
+  }
+
+  async function handleConfirmDeleteChat() {
+    if (!chatToDelete) return;
+    const idStr = String(chatToDelete.id);
+    setChatToDelete(null);
+
     unregisterOwnedSessionId(idStr);
     setChats((prev) => prev.filter((chat) => String(chat.id) !== idStr));
 
@@ -373,7 +387,7 @@ function App() {
         currentChatId={currentChatId}
         setCurrentChatId={handleSelectChat}
         onNewChat={handleNewChat}
-        onDeleteChat={handleDeleteChat}
+        onDeleteChat={handleRequestDeleteChat}
         aiMode={aiMode}
         onSwitchMode={handleSwitchMode}
         streamingStates={streamingStates}
@@ -387,10 +401,17 @@ function App() {
         chats={modeChats}
         currentChatId={currentChatId}
         onUpdateTitle={handleUpdateTitle}
-        onDeleteChat={handleDeleteChat}
+        onDeleteChat={handleRequestDeleteChat}
         aiMode={aiMode}
         streamingStates={streamingStates}
         setStreamingStates={setStreamingStates}
+      />
+
+      <DeleteModal
+        open={Boolean(chatToDelete)}
+        chatTitle={chatToDelete?.title}
+        onClose={() => setChatToDelete(null)}
+        onConfirm={handleConfirmDeleteChat}
       />
     </div>
   );
