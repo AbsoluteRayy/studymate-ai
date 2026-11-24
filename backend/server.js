@@ -62,7 +62,6 @@ function getGroqQwenModels() {
     .filter((m) => !m.includes("qwq"));
 
   if (envModels.length > 0) {
-    // Pastikan qwen/qwen3-32b dicoba lebih dulu jika ada, agar jawaban panjang selesai 1x jalan
     const sorted = [...new Set(envModels)].sort((a, b) => {
       if (a.includes("qwen3-32b")) return -1;
       if (b.includes("qwen3-32b")) return 1;
@@ -71,7 +70,6 @@ function getGroqQwenModels() {
     return sorted;
   }
 
-  // qwen/qwen3-32b di urutan pertama karena batas OTPM-nya jauh lebih besar (tidak kepotong di 900 token)
   return [
     "qwen/qwen3-32b",
     "qwen/qwen3.8-27b",
@@ -81,9 +79,11 @@ function getGroqQwenModels() {
 function getSafeMaxTokensForModel(modelName) {
   const lower = String(modelName || "").toLowerCase();
   if (lower.includes("qwen3.8-27b")) {
-    return 920; // Batas OTPM free tier Groq untuk model ini = 1000
+    return 900; // Limit OTPM free tier Groq = 1000
   }
-  return 6000;
+  // Limit TPM free tier Groq untuk qwen/qwen3-32b = 6000 (Input + Output).
+  // 3500 menyisakan ~2500 token untuk System Prompt + History agar tidak terkena 413/429!
+  return 3500;
 }
 
 let groqRoundRobinIndex = 0;
@@ -106,15 +106,15 @@ function getOrderedGroqClients() {
       baseURL: process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1",
       apiKey,
       maxRetries: 0,
-      timeout: 15000,
+      timeout: 18000,
     }),
   }));
 }
 
 // ============================
-// Helper: Batasi Ukuran History Agar Tidak Melebihi ITPM Groq
+// Helper: Batasi Ukuran History Agar Input + Output Tidak Melebihi 6000 TPM Groq
 // ============================
-function trimHistoryByBudget(historyList, maxChars = 11500) {
+function trimHistoryByBudget(historyList, maxChars = 6500) {
   if (!Array.isArray(historyList) || historyList.length === 0) return [];
 
   const selected = [];
@@ -129,8 +129,8 @@ function trimHistoryByBudget(historyList, maxChars = 11500) {
       .replace(/<!--\s*ANSWER_KEY:[\s\S]*?-->/gi, "")
       .trim();
 
-    if (content.length > 6500) {
-      content = content.slice(0, 6500) + "\n...[dipersingkat]";
+    if (content.length > 3500) {
+      content = content.slice(0, 3500) + "\n...[dipersingkat]";
     }
 
     if (usedChars + content.length > maxChars && selected.length >= 2) {
@@ -281,7 +281,7 @@ Jawablah menggunakan Markdown yang rapi, jelas, terstruktur, dan langsung ke int
 `;
 
 // ============================
-// Helper: Streaming Gemini Native (Cepat Tanpa Hang + Auto-Continue)
+// Helper: Streaming Gemini Native
 // ============================
 async function streamFromGemini({
   activeSystemPrompt,
@@ -348,7 +348,6 @@ async function streamFromGemini({
         maxOutputTokens: 8192,
       };
 
-      // Nonaktifkan thinking budget pada model 2.5-flash agar streaming dimulai < 1 detik & tidak memakan jatah token output
       if (modelName.includes("2.5-flash") && !modelName.includes("lite")) {
         generationConfig.thinkingConfig = { thinkingBudget: 0 };
       }
@@ -494,7 +493,7 @@ app.post("/chat", async (req, res) => {
   };
 
   try {
-    const formattedHistory = trimHistoryByBudget(history, 11500);
+    const formattedHistory = trimHistoryByBudget(history, 6500);
     let fullReply = "";
 
     if (hasImages) {
@@ -559,13 +558,20 @@ app.post("/chat", async (req, res) => {
                     },
                   ];
 
-              const stream = await client.chat.completions.create({
+              const requestOptions = {
                 model: modelName,
                 messages: messagesPayload,
                 temperature: activeMode === "general" ? 0.65 : 0.5,
                 max_tokens: safeMaxTokens,
                 stream: true,
-              });
+              };
+
+              // Nonaktifkan hidden <think> pada Qwen 3 agar 100% kuota token digunakan untuk jawaban akhir
+              if (modelName.includes("qwen3-32b")) {
+                requestOptions.reasoning_effort = "none";
+              }
+
+              const stream = await client.chat.completions.create(requestOptions);
 
               let thinkBuffer = "";
               let finishedThinking = false;
