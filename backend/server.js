@@ -67,7 +67,6 @@ function getGroqQwenModels() {
   return [
     "qwen/qwen3.8-27b",
     "qwen/qwen3-32b",
-    "qwen-qwq-32b",
   ];
 }
 

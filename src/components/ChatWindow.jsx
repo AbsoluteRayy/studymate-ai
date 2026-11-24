@@ -216,8 +216,8 @@ function ChatWindow({
     const imageList = Array.isArray(images)
       ? images
       : images
-        ? [images]
-        : [];
+      ? [images]
+      : [];
     const quizMode = isQuizRequestPrompt(cleanPrompt);
 
     const userMessage = {
@@ -290,8 +290,8 @@ function ChatWindow({
       Array.isArray(originalMsg?.images) && originalMsg.images.length > 0
         ? originalMsg.images
         : originalMsg?.image
-          ? [originalMsg.image]
-          : [];
+        ? [originalMsg.image]
+        : [];
 
     if (!originalMsg || (!trimmed && preservedImages.length === 0)) return;
 
@@ -354,26 +354,32 @@ function ChatWindow({
   }
 
   async function handleGenerateQuiz(content) {
+    if (isCurrentChatBusy) return;
     const targetChatId = String(currentChatId);
     setChatThinking(targetChatId, true, true);
 
     try {
       const domainLabel = isGeneral ? "materi" : "materi Basis Data";
+      const trimmedMaterial = String(content || "").slice(0, 4500);
+      const quizHeaderTitle = isGeneral ? "# Quiz Latihan" : "# Quiz Basis Data";
+
       const prompt = `Berdasarkan ${domainLabel} berikut:
 
-${content}
+${trimmedMaterial}
 
 Buatkan 5 soal latihan pilihan ganda dalam Bahasa Indonesia (tingkat kesulitan level mahasiswa).
 
 ATURAN FORMAT WAJIB:
-1. HANYA tampilkan pertanyaan dan pilihan jawaban (A, B, C, D).
-2. DILARANG KERAS menampilkan kunci jawaban, tanda centang, atau pembahasan sekarang (tunggu pengguna mengumpulkan jawabannya terlebih dahulu).
+1. Awali persis dengan baris judul: ${quizHeaderTitle}
+2. Tampilkan pertanyaan dan 4 pilihan jawaban (A, B, C, D) tanpa menulis pembahasan atau jawaban benar di dalam teks soal.
 3. Gunakan format persis seperti ini untuk setiap nomor:
 1. Teks pertanyaan?
 A. Pilihan A
 B. Pilihan B
 C. Pilihan C
-D. Pilihan D`;
+D. Pilihan D
+4. Di baris paling akhir setelah soal nomor 5, WAJIB sertakan kunci jawaban dalam format komentar HTML JSON persis seperti ini:
+<!-- ANSWER_KEY: {"1":"B","2":"A","3":"D","4":"C","5":"A"} -->`;
 
       await streamAIResponse(
         {
@@ -384,14 +390,17 @@ D. Pilihan D`;
           mode: aiMode,
         },
         targetChatId,
-        isGeneral ? "# Quiz Latihan\n\n" : "# Quiz Basis Data\n\n",
+        "",
         { isQuiz: true }
       );
-    } catch {
+    } catch (error) {
       setChatThinking(targetChatId, false);
       onUpdateChatMessages(targetChatId, (prev) => [
         ...prev,
-        { sender: "ai", text: "Gagal membuat quiz." },
+        {
+          sender: "ai",
+          text: error?.message || "Gagal membuat quiz. Silakan coba lagi.",
+        },
       ]);
     }
   }
@@ -402,8 +411,8 @@ D. Pilihan D`;
     currentStreamPhase === "thinking-quiz"
       ? "Sedang membuat soal quiz..."
       : isGeneral
-        ? "StudyMate sedang berpikir..."
-        : "Menganalisis struktur basis data...";
+      ? "StudyMate sedang berpikir..."
+      : "Menganalisis struktur basis data...";
 
   return (
     <div

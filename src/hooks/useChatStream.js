@@ -97,27 +97,24 @@ export function useChatStream({
         if (!trimmed.startsWith("data: ")) continue;
         const jsonStr = trimmed.slice(6);
 
+        let parsed;
         try {
-          const parsed = JSON.parse(jsonStr);
-          if (parsed.error) {
-            throw new Error(parsed.error);
-          }
-          if (parsed.token) {
-            pendingQueue += parsed.token;
-          }
-          if (parsed.title) {
-            receivedTitle = parsed.title;
-          }
-          if (parsed.done) {
-            streamFinished = true;
-          }
-        } catch (parseErr) {
-          if (parseErr.message && !jsonStr.startsWith("{")) {
-            continue;
-          }
-          if (parseErr.message?.startsWith("Error AI:")) {
-            throw parseErr;
-          }
+          parsed = JSON.parse(jsonStr);
+        } catch {
+          continue;
+        }
+
+        if (parsed.error) {
+          throw new Error(parsed.error);
+        }
+        if (parsed.token) {
+          pendingQueue += parsed.token;
+        }
+        if (parsed.title) {
+          receivedTitle = parsed.title;
+        }
+        if (parsed.done) {
+          streamFinished = true;
         }
       }
     }
@@ -193,7 +190,6 @@ export function useChatStream({
         }
       }
 
-      // Flush sisa decoder & sisa sseBuffer terakhir agar kalimat penutup tidak hilang
       sseBuffer += decoder.decode();
       if (sseBuffer.trim()) {
         processSseBlock(sseBuffer);
