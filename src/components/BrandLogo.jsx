@@ -6,6 +6,7 @@ function BrandLogo({ size = 23, mode = "database" }) {
 
   return (
     <svg
+      key={mode}
       width={size}
       height={size}
       viewBox="0 0 100 100"
