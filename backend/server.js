@@ -68,7 +68,6 @@ function getGroqQwenModels() {
   return [
     "qwen/qwen3.8-27b",
     "qwen/qwen3-32b",
-    "qwen-qwq-32b",
   ];
 }
 
@@ -285,8 +284,8 @@ app.post("/chat", async (req, res) => {
     Array.isArray(images) && images.length > 0
       ? images
       : image
-      ? [image]
-      : [];
+        ? [image]
+        : [];
   const hasImages = rawImages.length > 0;
 
   const userTypedPrompt = (prompt && prompt.trim()) || "";
@@ -296,8 +295,8 @@ app.post("/chat", async (req, res) => {
         ? `Analisis dan jelaskan ke-${rawImages.length} gambar yang dikirimkan pengguna ini secara lengkap, jelas, dan terstruktur.`
         : `Analisis dan jelaskan ke-${rawImages.length} gambar Basis Data yang dikirimkan pengguna ini secara lengkap dan terstruktur.`
       : activeMode === "general"
-      ? "Analisis dan jelaskan gambar yang dikirimkan pengguna ini secara lengkap, jelas, dan terstruktur."
-      : "Analisis dan jelaskan gambar Basis Data yang dikirimkan pengguna ini secara lengkap dan terstruktur.";
+        ? "Analisis dan jelaskan gambar yang dikirimkan pengguna ini secara lengkap, jelas, dan terstruktur."
+        : "Analisis dan jelaskan gambar Basis Data yang dikirimkan pengguna ini secara lengkap dan terstruktur.";
 
   const aiInstructionPrompt =
     userTypedPrompt || (hasImages ? defaultImagePrompt : "");
