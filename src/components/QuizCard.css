@@ -101,6 +101,14 @@
   gap: 8px;
 }
 
+.quiz-number-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .quiz-number-pill {
   display: inline-block;
   width: fit-content;
@@ -115,6 +123,26 @@
 .chat-window.dark .quiz-number-pill {
   background: var(--accent-soft-bg-dark);
   color: var(--accent-badge-text-dark);
+}
+
+.quiz-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.quiz-status-badge.correct {
+  background: rgba(16, 185, 129, 0.16);
+  color: #10b981;
+}
+
+.quiz-status-badge.wrong {
+  background: rgba(239, 68, 68, 0.16);
+  color: #ef4444;
 }
 
 .quiz-question-text {
@@ -199,9 +227,32 @@
   box-shadow: 0 5px 16px var(--accent-glow);
 }
 
+.quiz-option-item.correct-answer {
+  background: rgba(16, 185, 129, 0.22) !important;
+  color: #059669 !important;
+  font-weight: 600;
+  box-shadow: 0 3px 12px rgba(16, 185, 129, 0.2);
+}
+
+.chat-window.dark .quiz-option-item.correct-answer {
+  background: rgba(16, 185, 129, 0.24) !important;
+  color: #6ee7b7 !important;
+}
+
+.quiz-option-item.wrong-answer {
+  background: rgba(239, 68, 68, 0.22) !important;
+  color: #dc2626 !important;
+  font-weight: 600;
+  box-shadow: 0 3px 12px rgba(239, 68, 68, 0.2);
+}
+
+.chat-window.dark .quiz-option-item.wrong-answer {
+  background: rgba(239, 68, 68, 0.25) !important;
+  color: #fca5a5 !important;
+}
+
 .quiz-option-item.locked {
   cursor: default;
-  opacity: 0.9;
 }
 
 .quiz-option-radio {
@@ -219,7 +270,9 @@
   background: rgba(255, 255, 255, 0.14);
 }
 
-.quiz-option-item.selected .quiz-option-radio {
+.quiz-option-item.selected .quiz-option-radio,
+.quiz-option-item.correct-answer .quiz-option-radio,
+.quiz-option-item.wrong-answer .quiz-option-radio {
   background: #ffffff;
 }
 
@@ -230,6 +283,14 @@
   background: var(--accent-primary);
 }
 
+.quiz-option-item.correct-answer .quiz-option-dot {
+  background: #10b981;
+}
+
+.quiz-option-item.wrong-answer .quiz-option-dot {
+  background: #ef4444;
+}
+
 .quiz-option-key {
   font-weight: 700;
   flex-shrink: 0;
@@ -238,6 +299,11 @@
 .quiz-option-text {
   flex: 1;
   line-height: 1.45;
+}
+
+.quiz-option-emoji {
+  font-size: 15px;
+  flex-shrink: 0;
 }
 
 /* Tombol Kumpulkan Jawaban */

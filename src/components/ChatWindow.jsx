@@ -496,6 +496,7 @@ D. Pilihan D
                   key={index}
                   msg={msg}
                   index={index}
+                  nextMsg={messages[index + 1]}
                   isBusy={isCurrentChatBusy}
                   isCurrentlyStreamingMsg={
                     isCurrentChatStreaming &&

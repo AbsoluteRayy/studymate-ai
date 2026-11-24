@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./QuizCard.css";
 
 function renderFormattedInline(text) {
@@ -28,6 +28,22 @@ function extractHiddenAnswerKey(text) {
   } catch {
     return {};
   }
+}
+
+export function extractSubmittedAnswersFromUserText(text) {
+  if (!text) return null;
+  const trimmed = String(text).trim();
+  if (!/^ini jawaban quiz saya/i.test(trimmed)) return null;
+
+  const restored = {};
+  // Mendukung format "1. Jawaban Saya: D ..." maupun format lama/ringkas "1. D ..."
+  const regex = /(?:^|\n|\s)(\d+)\.\s*(?:Jawaban\s*Saya:\s*)?([A-E])\b/gi;
+  let match;
+  while ((match = regex.exec(trimmed)) !== null) {
+    restored[Number(match[1])] = match[2].toUpperCase();
+  }
+
+  return Object.keys(restored).length > 0 ? restored : null;
 }
 
 export function parseQuizFromMarkdown(text) {
@@ -101,9 +117,25 @@ export function parseQuizFromMarkdown(text) {
   };
 }
 
-function QuizCard({ quizData, onSubmitAnswers, disabled }) {
-  const [selectedAnswers, setSelectedAnswers] = useState({});
-  const [isSubmitted, setIsSubmitted] = useState(false);
+function QuizCard({
+  quizData,
+  savedUserAnswers = null,
+  onSubmitAnswers,
+  disabled,
+}) {
+  const [selectedAnswers, setSelectedAnswers] = useState(
+    () => savedUserAnswers || {}
+  );
+  const [isSubmitted, setIsSubmitted] = useState(() =>
+    Boolean(savedUserAnswers && Object.keys(savedUserAnswers).length > 0)
+  );
+
+  useEffect(() => {
+    if (savedUserAnswers && Object.keys(savedUserAnswers).length > 0) {
+      setSelectedAnswers(savedUserAnswers);
+      setIsSubmitted(true);
+    }
+  }, [savedUserAnswers]);
 
   const totalQuestions = quizData.questions.length;
   const answeredCount = useMemo(
@@ -112,6 +144,31 @@ function QuizCard({ quizData, onSubmitAnswers, disabled }) {
   );
 
   const allAnswered = answeredCount === totalQuestions;
+  const hasCompleteAnswerKey = useMemo(
+    () => quizData.questions.every((q) => Boolean(q.correctAnswer)),
+    [quizData]
+  );
+
+  const scoreSummary = useMemo(() => {
+    if (!isSubmitted || !hasCompleteAnswerKey) return null;
+    let correct = 0;
+    for (const q of quizData.questions) {
+      if (selectedAnswers[q.number] === q.correctAnswer) {
+        correct += 1;
+      }
+    }
+    return {
+      correct,
+      wrong: totalQuestions - correct,
+      score: Math.round((correct / totalQuestions) * 100),
+    };
+  }, [
+    isSubmitted,
+    hasCompleteAnswerKey,
+    quizData,
+    selectedAnswers,
+    totalQuestions,
+  ]);
 
   function handleSelectOption(questionNumber, optionKey) {
     if (isSubmitted || disabled) return;
@@ -124,10 +181,6 @@ function QuizCard({ quizData, onSubmitAnswers, disabled }) {
   function handleSubmit() {
     if (!allAnswered || isSubmitted || disabled) return;
     setIsSubmitted(true);
-
-    const hasCompleteAnswerKey = quizData.questions.every((q) =>
-      Boolean(q.correctAnswer)
-    );
 
     if (hasCompleteAnswerKey) {
       let correctCount = 0;
@@ -169,7 +222,9 @@ Tolong tampilkan kembali rekap skor & jumlah benar/salah persis sesuai angka res
         .map((q) => {
           const chosenKey = selectedAnswers[q.number];
           const chosenOpt = q.options.find((o) => o.key === chosenKey);
-          return `${q.number}. ${chosenKey}${chosenOpt ? ` (${chosenOpt.text})` : ""}`;
+          return `${q.number}. ${chosenKey}${
+            chosenOpt ? ` (${chosenOpt.text})` : ""
+          }`;
         })
         .join("\n");
 
@@ -183,22 +238,41 @@ Tolong tampilkan kembali rekap skor & jumlah benar/salah persis sesuai angka res
     <div className="quiz-interactive-container">
       <div className="quiz-header-bar">
         <div className="quiz-header-info">
-          <span className="quiz-badge">Quiz Interaktif</span>
+          <span className="quiz-badge">
+            {isSubmitted ? "Quiz Selesai" : "Quiz Interaktif"}
+          </span>
           <h3 className="quiz-main-title">{quizData.title}</h3>
         </div>
         <div className="quiz-progress-pill">
-          Terjawab {answeredCount} / {totalQuestions}
+          {scoreSummary
+            ? `Skor ${scoreSummary.score}/100 • ✅ ${scoreSummary.correct}  ❌ ${scoreSummary.wrong}`
+            : isSubmitted
+            ? `Selesai (${answeredCount}/${totalQuestions})`
+            : `Terjawab ${answeredCount} / ${totalQuestions}`}
         </div>
       </div>
 
       <div className="quiz-questions-list">
         {quizData.questions.map((q) => {
           const chosen = selectedAnswers[q.number];
+          const showEvaluation = isSubmitted && Boolean(q.correctAnswer);
+          const isQuestionCorrect = showEvaluation && chosen === q.correctAnswer;
 
           return (
             <div key={q.number} className="quiz-question-box">
               <div className="quiz-question-header">
-                <span className="quiz-number-pill">Nomor {q.number}</span>
+                <div className="quiz-number-row">
+                  <span className="quiz-number-pill">Nomor {q.number}</span>
+                  {showEvaluation && (
+                    <span
+                      className={`quiz-status-badge ${
+                        isQuestionCorrect ? "correct" : "wrong"
+                      }`}
+                    >
+                      {isQuestionCorrect ? "✅ Benar" : "❌ Salah"}
+                    </span>
+                  )}
+                </div>
                 <p className="quiz-question-text">
                   {renderFormattedInline(q.question)}
                 </p>
@@ -207,23 +281,44 @@ Tolong tampilkan kembali rekap skor & jumlah benar/salah persis sesuai angka res
               <div className="quiz-options-box">
                 {q.options.map((opt) => {
                   const isSelected = chosen === opt.key;
+                  const isRightAnswer =
+                    showEvaluation && opt.key === q.correctAnswer;
+                  const isWrongChosen =
+                    showEvaluation && isSelected && opt.key !== q.correctAnswer;
+
+                  let stateClass = "";
+                  if (showEvaluation) {
+                    if (isRightAnswer) stateClass = "correct-answer";
+                    else if (isWrongChosen) stateClass = "wrong-answer";
+                  } else if (isSelected) {
+                    stateClass = "selected";
+                  }
+
                   return (
                     <button
                       key={opt.key}
                       type="button"
-                      className={`quiz-option-item ${
-                        isSelected ? "selected" : ""
-                      } ${isSubmitted ? "locked" : ""}`}
+                      className={`quiz-option-item ${stateClass} ${
+                        isSubmitted ? "locked" : ""
+                      }`}
                       onClick={() => handleSelectOption(q.number, opt.key)}
                       disabled={isSubmitted || disabled}
                     >
                       <span className="quiz-option-radio">
-                        {isSelected && <span className="quiz-option-dot" />}
+                        {(isSelected || isRightAnswer) && (
+                          <span className="quiz-option-dot" />
+                        )}
                       </span>
                       <span className="quiz-option-key">{opt.key}.</span>
                       <span className="quiz-option-text">
                         {renderFormattedInline(opt.text)}
                       </span>
+                      {showEvaluation && isRightAnswer && (
+                        <span className="quiz-option-emoji">✅</span>
+                      )}
+                      {showEvaluation && isWrongChosen && (
+                        <span className="quiz-option-emoji">❌</span>
+                      )}
                     </button>
                   );
                 })}
@@ -243,7 +338,7 @@ Tolong tampilkan kembali rekap skor & jumlah benar/salah persis sesuai angka res
           disabled={!allAnswered || isSubmitted || disabled}
         >
           {isSubmitted
-            ? "Jawaban Terkumpul — Lihat Penilaian di Bawah"
+            ? "✅ Jawaban Sudah Dikumpulkan — Lihat Pembahasan di Bawah"
             : allAnswered
             ? "Kumpulkan Jawaban"
             : `Jawab Semua Soal (${answeredCount}/${totalQuestions})`}

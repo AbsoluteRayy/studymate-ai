@@ -1,7 +1,10 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import CodeBlock from "./CodeBlock";
-import QuizCard, { parseQuizFromMarkdown } from "./QuizCard";
+import QuizCard, {
+  extractSubmittedAnswersFromUserText,
+  parseQuizFromMarkdown,
+} from "./QuizCard";
 
 function stripHiddenAnswerKey(text) {
   if (!text) return "";
@@ -25,6 +28,7 @@ function looksLikeQuizInProgress(text) {
 
 function MessageBubble({
   msg,
+  nextMsg,
   index,
   isBusy,
   isCurrentlyStreamingMsg,
@@ -157,6 +161,11 @@ function MessageBubble({
     ? parseQuizFromMarkdown(msg.text)
     : null;
 
+  const savedUserAnswers =
+    parsedQuiz && nextMsg?.sender === "user"
+      ? extractSubmittedAnswersFromUserText(nextMsg.text)
+      : null;
+
   const cleanVisibleText = stripHiddenAnswerKey(msg.text);
 
   return (
@@ -176,6 +185,7 @@ function MessageBubble({
         ) : parsedQuiz ? (
           <QuizCard
             quizData={parsedQuiz}
+            savedUserAnswers={savedUserAnswers}
             onSubmitAnswers={onSubmitQuizAnswers}
             disabled={isBusy}
           />
