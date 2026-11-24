@@ -74,7 +74,7 @@ function getGroqQwenModels() {
 function getSafeMaxTokensForModel(modelName) {
   const lower = String(modelName || "").toLowerCase();
   if (lower.includes("qwen3.8-27b")) {
-    return 920;
+    return 920; // Batas OTPM free tier Groq untuk model ini = 1000
   }
   return 8192;
 }
@@ -99,6 +99,7 @@ function getOrderedGroqClients() {
       baseURL: process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1",
       apiKey,
       maxRetries: 0,
+      timeout: 22000,
     }),
   }));
 }
@@ -310,10 +311,11 @@ async function streamFromGemini({
   for (const modelName of geminiModels) {
     try {
       let continuationRound = 0;
-      const maxContinuations = 2;
+      const maxContinuations = 1;
 
       while (continuationRound <= maxContinuations && !isResponseClosed()) {
         const isResuming = collectedReply.length > 0;
+        const tailSnippet = collectedReply.slice(-600);
 
         const contentsPayload = !isResuming
           ? [
@@ -325,17 +327,9 @@ async function streamFromGemini({
           : [
               {
                 role: "user",
-                parts: [{ text: basePrompt }, ...inlineImageParts],
-              },
-              {
-                role: "model",
-                parts: [{ text: collectedReply }],
-              },
-              {
-                role: "user",
                 parts: [
                   {
-                    text: "Jawabanmu terpotong di tengah jalan. Lanjutkan langsung persis dari kata terakhir tanpa mengulang bagian sebelumnya hingga selesai tuntas.",
+                    text: `${basePrompt}\n\n---\nJawaban sebelumnya terpotong pada bagian akhir berikut:\n"""\n${tailSnippet}\n"""\n\nLanjutkan langsung persis setelah potongan teks di atas hingga selesai tuntas (jangan ulangi teks yang sudah tertulis).`,
                   },
                 ],
               },
@@ -350,6 +344,7 @@ async function streamFromGemini({
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            signal: AbortSignal.timeout(25000),
             body: JSON.stringify({
               contents: contentsPayload,
               generationConfig: {
@@ -373,6 +368,10 @@ async function streamFromGemini({
         let lastFinishReason = "";
 
         while (true) {
+          if (isResponseClosed()) {
+            await reader.cancel().catch(() => {});
+            break;
+          }
           const { done, value } = await reader.read();
           if (done) break;
 
@@ -408,7 +407,7 @@ async function streamFromGemini({
 
         if (lastFinishReason === "MAX_TOKENS" && collectedReply.length > 0) {
           console.warn(
-            `⚠️ ${modelName} terpotong MAX_TOKENS, melanjutkan otomatis (putaran ${continuationRound + 1})...`
+            `⚠️ ${modelName} terpotong MAX_TOKENS, melanjutkan otomatis...`
           );
           continuationRound += 1;
           continue;
@@ -426,11 +425,15 @@ async function streamFromGemini({
     }
   }
 
+  if (collectedReply.length > 0) {
+    return collectedReply;
+  }
+
   throw new Error(lastErrMsg);
 }
 
 // ============================
-// Chat Endpoint (Hybrid: Gemini Multi-Vision Stream + Auto-Fallback Multi-Qwen Groq + Seamless Continuation)
+// Chat Endpoint
 // ============================
 app.post("/chat", async (req, res) => {
   const {
@@ -477,8 +480,15 @@ app.post("/chat", async (req, res) => {
   res.flushHeaders?.();
 
   let responseClosed = false;
+  const heartbeatInterval = setInterval(() => {
+    if (!responseClosed) {
+      res.write(": ping\n\n");
+    }
+  }, 3000);
+
   res.on("close", () => {
     responseClosed = true;
+    clearInterval(heartbeatInterval);
   });
 
   const emitToken = (tokenText) => {
@@ -529,8 +539,12 @@ app.post("/chat", async (req, res) => {
           const safeMaxTokens = getSafeMaxTokensForModel(modelName);
 
           for (const { label, client } of groqClients) {
+            if (responseClosed) break outerModelLoop;
+
             try {
               const isContinuing = fullReply.length > 0;
+              const tailSnippet = fullReply.slice(-550);
+
               console.log(
                 `Prompt (${modelName} | max_tokens=${safeMaxTokens} | continue=${isContinuing} via ${label}) [mode: ${activeMode}]`
               );
@@ -543,13 +557,9 @@ app.post("/chat", async (req, res) => {
                   ]
                 : [
                     { role: "system", content: activeSystemPrompt },
-                    ...formattedHistory,
-                    { role: "user", content: aiInstructionPrompt },
-                    { role: "assistant", content: fullReply },
                     {
                       role: "user",
-                      content:
-                        "Jawabanmu terpotong batas panjang. Lanjutkan langsung persis dari kata terakhir tanpa mengulang bagian sebelumnya.",
+                      content: `Permintaan awal pengguna: ${aiInstructionPrompt}\n\nJawaban sebelumnya terpotong pada bagian akhir berikut:\n"""\n${tailSnippet}\n"""\n\nLanjutkan langsung persis setelah potongan teks di atas hingga selesai tuntas (jangan mengulang bagian yang sudah tertulis).`,
                     },
                   ];
 
@@ -566,6 +576,7 @@ app.post("/chat", async (req, res) => {
               let finishReason = "";
 
               for await (const chunk of stream) {
+                if (responseClosed) break;
                 const choice = chunk.choices[0];
                 if (choice?.finish_reason) {
                   finishReason = choice.finish_reason;
@@ -612,10 +623,9 @@ app.post("/chat", async (req, res) => {
                 }
               }
 
-              // Jika model token terbatas (qwen3.8-27b) terpotong length, langsung lompat ke model besar berikutnya (qwen3-32b / Gemini) untuk menyelesaikan sisanya dalam 1x jalan
               if (finishReason === "length" && fullReply.length > 0) {
                 console.warn(
-                  `⚠️ ${modelName} terpotong finish_reason=length, melanjutkan sisa jawaban dengan model berikutnya...`
+                  `⚠️ ${modelName} terpotong finish_reason=length, melanjutkan sisa jawaban dengan model besar berikutnya...`
                 );
                 needsContinuation = true;
                 break;
@@ -650,23 +660,29 @@ app.post("/chat", async (req, res) => {
         }
       }
 
-      if (!groqCompleted) {
+      if (!groqCompleted && !responseClosed) {
         if (process.env.GEMINI_API_KEY) {
           console.warn(
             needsContinuation
               ? "⚠️ Menyambung sisa jawaban terpotong ke Gemini Native..."
               : "⚠️ Semua model Groq limit/gagal, beralih ke Gemini Native..."
           );
-          fullReply = await streamFromGemini({
-            activeSystemPrompt,
-            formattedHistory,
-            aiInstructionPrompt,
-            inlineImageParts: [],
-            existingPartialReply: fullReply,
-            activeMode,
-            onToken: emitToken,
-            isResponseClosed: () => responseClosed,
-          });
+          try {
+            fullReply = await streamFromGemini({
+              activeSystemPrompt,
+              formattedHistory,
+              aiInstructionPrompt,
+              inlineImageParts: [],
+              existingPartialReply: fullReply,
+              activeMode,
+              onToken: emitToken,
+              isResponseClosed: () => responseClosed,
+            });
+          } catch (geminiFallbackErr) {
+            if (fullReply.length === 0) {
+              throw geminiFallbackErr;
+            }
+          }
         } else if (fullReply.length === 0) {
           throw new Error(lastGroqError);
         }
@@ -735,6 +751,7 @@ app.post("/chat", async (req, res) => {
       );
     }
 
+    clearInterval(heartbeatInterval);
     if (!responseClosed) {
       res.write(
         `data: ${JSON.stringify({ done: true, title: generatedTitle })}\n\n`
@@ -742,9 +759,9 @@ app.post("/chat", async (req, res) => {
     }
     res.end();
   } catch (error) {
+    clearInterval(heartbeatInterval);
     console.error("====================");
     console.error(error);
-    console.error(error.response?.data);
     console.error("====================");
 
     if (!responseClosed) {
