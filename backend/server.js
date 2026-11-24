@@ -67,7 +67,6 @@ function getGroqQwenModels() {
   // Urutan prioritas model Qwen di Groq (otomatis pindah jika limit / 429 / 413)
   return [
     "qwen/qwen3.8-27b",
-    "qwen/qwen3-32b",
   ];
 }
 
