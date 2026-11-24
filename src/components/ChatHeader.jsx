@@ -11,6 +11,7 @@ function ChatHeader({
   onCustomRenamed,
   darkMode,
   onToggleDarkMode,
+  aiMode,
 }) {
   const menuRef = useRef(null);
   const renameInputRef = useRef(null);
@@ -79,7 +80,7 @@ function ChatHeader({
             aria-label="Open sidebar"
           >
             <span className="header-logo-default anim-allow">
-              <BrandLogo size={26} />
+              <BrandLogo size={26} mode={aiMode} />
             </span>
 
             <span className="header-logo-hover-icon anim-allow">

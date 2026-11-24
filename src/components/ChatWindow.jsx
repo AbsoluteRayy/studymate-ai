@@ -216,8 +216,8 @@ function ChatWindow({
     const imageList = Array.isArray(images)
       ? images
       : images
-      ? [images]
-      : [];
+        ? [images]
+        : [];
     const quizMode = isQuizRequestPrompt(cleanPrompt);
 
     const userMessage = {
@@ -290,8 +290,8 @@ function ChatWindow({
       Array.isArray(originalMsg?.images) && originalMsg.images.length > 0
         ? originalMsg.images
         : originalMsg?.image
-        ? [originalMsg.image]
-        : [];
+          ? [originalMsg.image]
+          : [];
 
     if (!originalMsg || (!trimmed && preservedImages.length === 0)) return;
 
@@ -402,8 +402,8 @@ D. Pilihan D`;
     currentStreamPhase === "thinking-quiz"
       ? "Sedang membuat soal quiz..."
       : isGeneral
-      ? "StudyMate sedang berpikir..."
-      : "Menganalisis struktur basis data...";
+        ? "StudyMate sedang berpikir..."
+        : "Menganalisis struktur basis data...";
 
   return (
     <div
@@ -423,6 +423,7 @@ D. Pilihan D`;
         onCustomRenamed={() => setIsCustomRenamed(true)}
         darkMode={darkMode}
         onToggleDarkMode={() => setDarkMode(!darkMode)}
+        aiMode={aiMode}
       />
 
       <div className="chat-area-wrapper">
