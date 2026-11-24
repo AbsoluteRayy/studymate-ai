@@ -62,12 +62,19 @@ function getGroqQwenModels() {
     .filter((m) => !m.includes("qwq"));
 
   if (envModels.length > 0) {
-    return [...new Set(envModels)];
+    // Pastikan qwen/qwen3-32b dicoba lebih dulu jika ada, agar jawaban panjang selesai 1x jalan
+    const sorted = [...new Set(envModels)].sort((a, b) => {
+      if (a.includes("qwen3-32b")) return -1;
+      if (b.includes("qwen3-32b")) return 1;
+      return 0;
+    });
+    return sorted;
   }
 
+  // qwen/qwen3-32b di urutan pertama karena batas OTPM-nya jauh lebih besar (tidak kepotong di 900 token)
   return [
-    "qwen/qwen3.8-27b",
     "qwen/qwen3-32b",
+    "qwen/qwen3.8-27b",
   ];
 }
 
@@ -76,7 +83,7 @@ function getSafeMaxTokensForModel(modelName) {
   if (lower.includes("qwen3.8-27b")) {
     return 920; // Batas OTPM free tier Groq untuk model ini = 1000
   }
-  return 8192;
+  return 6000;
 }
 
 let groqRoundRobinIndex = 0;
@@ -99,13 +106,13 @@ function getOrderedGroqClients() {
       baseURL: process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1",
       apiKey,
       maxRetries: 0,
-      timeout: 22000,
+      timeout: 15000,
     }),
   }));
 }
 
 // ============================
-// Helper: Batasi Ukuran History Agar Tidak Melebihi 7000 ITPM Groq
+// Helper: Batasi Ukuran History Agar Tidak Melebihi ITPM Groq
 // ============================
 function trimHistoryByBudget(historyList, maxChars = 11500) {
   if (!Array.isArray(historyList) || historyList.length === 0) return [];
@@ -274,7 +281,7 @@ Jawablah menggunakan Markdown yang rapi, jelas, terstruktur, dan langsung ke int
 `;
 
 // ============================
-// Helper: Streaming Gemini Native (Model Aktif 2026: gemini-3.8-flash & gemini-2.5-flash)
+// Helper: Streaming Gemini Native (Cepat Tanpa Hang + Auto-Continue)
 // ============================
 async function streamFromGemini({
   activeSystemPrompt,
@@ -299,9 +306,8 @@ async function streamFromGemini({
     : `${activeSystemPrompt}\n\nInstruksi / Pertanyaan Pengguna:\n${aiInstructionPrompt}`;
 
   const geminiModels = [
-    "gemini-3.8-flash",
-    "gemini-3.8-flash-lite",
     "gemini-2.5-flash",
+    "gemini-3.8-flash",
     "gemini-2.5-flash-lite",
   ];
 
@@ -309,111 +315,101 @@ async function streamFromGemini({
   let lastErrMsg = "Gagal menghubungi Gemini API.";
 
   for (const modelName of geminiModels) {
+    if (isResponseClosed()) break;
+
     try {
-      let continuationRound = 0;
-      const maxContinuations = 1;
+      const isResuming = collectedReply.length > 0;
+      const tailSnippet = collectedReply.slice(-500);
 
-      while (continuationRound <= maxContinuations && !isResponseClosed()) {
-        const isResuming = collectedReply.length > 0;
-        const tailSnippet = collectedReply.slice(-600);
+      const contentsPayload = !isResuming
+        ? [
+            {
+              role: "user",
+              parts: [{ text: basePrompt }, ...inlineImageParts],
+            },
+          ]
+        : [
+            {
+              role: "user",
+              parts: [
+                {
+                  text: `Permintaan awal: ${aiInstructionPrompt}\n\nJawaban sebelumnya terpotong pada bagian akhir berikut:\n"""\n${tailSnippet}\n"""\n\nLanjutkan langsung persis setelah potongan teks di atas hingga selesai tuntas (jangan ulangi teks yang sudah tertulis).`,
+                },
+              ],
+            },
+          ];
 
-        const contentsPayload = !isResuming
-          ? [
-              {
-                role: "user",
-                parts: [{ text: basePrompt }, ...inlineImageParts],
-              },
-            ]
-          : [
-              {
-                role: "user",
-                parts: [
-                  {
-                    text: `${basePrompt}\n\n---\nJawaban sebelumnya terpotong pada bagian akhir berikut:\n"""\n${tailSnippet}\n"""\n\nLanjutkan langsung persis setelah potongan teks di atas hingga selesai tuntas (jangan ulangi teks yang sudah tertulis).`,
-                  },
-                ],
-              },
-            ];
+      console.log(
+        `Streaming ke Gemini Native (${modelName}, resume=${isResuming}) [mode: ${activeMode}]...`
+      );
 
-        console.log(
-          `Streaming ke Gemini Native (${modelName}, bagian #${continuationRound + 1}) [mode: ${activeMode}]...`
-        );
+      const generationConfig = {
+        temperature: activeMode === "general" ? 0.6 : 0.4,
+        maxOutputTokens: 8192,
+      };
 
-        const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            signal: AbortSignal.timeout(25000),
-            body: JSON.stringify({
-              contents: contentsPayload,
-              generationConfig: {
-                temperature: activeMode === "general" ? 0.6 : 0.4,
-                maxOutputTokens: 8192,
-              },
-            }),
-          }
-        );
+      // Nonaktifkan thinking budget pada model 2.5-flash agar streaming dimulai < 1 detik & tidak memakan jatah token output
+      if (modelName.includes("2.5-flash") && !modelName.includes("lite")) {
+        generationConfig.thinkingConfig = { thinkingBudget: 0 };
+      }
 
-        if (!geminiRes.ok || !geminiRes.body) {
-          const errData = await geminiRes.json().catch(() => ({}));
-          lastErrMsg = errData?.error?.message || `HTTP ${geminiRes.status}`;
-          console.warn(`⚠️ ${modelName} gagal: ${lastErrMsg}`);
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: AbortSignal.timeout(18000),
+          body: JSON.stringify({
+            contents: contentsPayload,
+            generationConfig,
+          }),
+        }
+      );
+
+      if (!geminiRes.ok || !geminiRes.body) {
+        const errData = await geminiRes.json().catch(() => ({}));
+        lastErrMsg = errData?.error?.message || `HTTP ${geminiRes.status}`;
+        console.warn(`⚠️ ${modelName} gagal: ${lastErrMsg}`);
+        continue;
+      }
+
+      const reader = geminiRes.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+
+      while (true) {
+        if (isResponseClosed()) {
+          await reader.cancel().catch(() => {});
           break;
         }
+        const { done, value } = await reader.read();
+        if (done) break;
 
-        const reader = geminiRes.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-        let buffer = "";
-        let lastFinishReason = "";
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
 
-        while (true) {
-          if (isResponseClosed()) {
-            await reader.cancel().catch(() => {});
-            break;
-          }
-          const { done, value } = await reader.read();
-          if (done) break;
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data: ")) continue;
+          const dataStr = trimmed.slice(6);
+          if (dataStr === "[DONE]") continue;
 
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed.startsWith("data: ")) continue;
-            const dataStr = trimmed.slice(6);
-            if (dataStr === "[DONE]") continue;
-
-            try {
-              const parsed = JSON.parse(dataStr);
-              const candidate = parsed?.candidates?.[0];
-              if (candidate?.finishReason) {
-                lastFinishReason = candidate.finishReason;
-              }
-              const chunkText =
-                candidate?.content?.parts
-                  ?.map((p) => p.text || "")
-                  .join("") || "";
-              if (chunkText) {
-                collectedReply += chunkText;
-                onToken(chunkText);
-              }
-            } catch {
-              // Abaikan chunk parsial
+          try {
+            const parsed = JSON.parse(dataStr);
+            const candidate = parsed?.candidates?.[0];
+            const chunkText =
+              candidate?.content?.parts
+                ?.map((p) => p.text || "")
+                .join("") || "";
+            if (chunkText) {
+              collectedReply += chunkText;
+              onToken(chunkText);
             }
+          } catch {
+            // Abaikan chunk parsial
           }
         }
-
-        if (lastFinishReason === "MAX_TOKENS" && collectedReply.length > 0) {
-          console.warn(
-            `⚠️ ${modelName} terpotong MAX_TOKENS, melanjutkan otomatis...`
-          );
-          continuationRound += 1;
-          continue;
-        }
-
-        break;
       }
 
       if (collectedReply.length > (existingPartialReply || "").length) {
@@ -484,7 +480,7 @@ app.post("/chat", async (req, res) => {
     if (!responseClosed) {
       res.write(": ping\n\n");
     }
-  }, 3000);
+  }, 2500);
 
   res.on("close", () => {
     responseClosed = true;
@@ -543,7 +539,7 @@ app.post("/chat", async (req, res) => {
 
             try {
               const isContinuing = fullReply.length > 0;
-              const tailSnippet = fullReply.slice(-550);
+              const tailSnippet = fullReply.slice(-500);
 
               console.log(
                 `Prompt (${modelName} | max_tokens=${safeMaxTokens} | continue=${isContinuing} via ${label}) [mode: ${activeMode}]`
@@ -625,7 +621,7 @@ app.post("/chat", async (req, res) => {
 
               if (finishReason === "length" && fullReply.length > 0) {
                 console.warn(
-                  `⚠️ ${modelName} terpotong finish_reason=length, melanjutkan sisa jawaban dengan model besar berikutnya...`
+                  `⚠️ ${modelName} terpotong finish_reason=length, melanjutkan sisa jawaban...`
                 );
                 needsContinuation = true;
                 break;
